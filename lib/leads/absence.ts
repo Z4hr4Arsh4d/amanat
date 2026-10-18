@@ -1,6 +1,6 @@
 // P2 owns. Absence handling (PLAN.md §3.6).
 import { prisma } from "@/lib/db";
-import { STATUS_LABEL, ensureConfig, findTarget, loadBusy, loadCandidates } from "./assign";
+import { STATUS_LABEL, TX_OPTIONS, ensureConfig, findTarget, loadBusy, loadCandidates } from "./assign";
 import { afterHandover } from "./handover";
 
 /**
@@ -54,7 +54,7 @@ export async function handleAbsence(input: { workspaceId: string; userId: string
         });
         if (target.viaRotation) await tx.assignmentConfig.update({ where: { workspaceId }, data: { rrCursor: target.user.id } });
         return { contactId: lead.contactId, to: target.user, reason };
-      });
+      }, TX_OPTIONS);
       if (moved) {
         await afterHandover({
           workspaceId, leadId, contactId: moved.contactId, kind: "ABSENCE", fromName: person.name,

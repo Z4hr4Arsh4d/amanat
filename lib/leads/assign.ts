@@ -12,6 +12,9 @@ export const STATUS_LABEL: Record<UserStatus, string> = {
 };
 export const SOURCE_LABEL = { WEB_FORM: "Web form", WHATSAPP: "WhatsApp", MANUAL: "Manual" } as const;
 
+/** Transactions here wait on a row lock and make several round trips, so give them more than the 5s default. */
+export const TX_OPTIONS = { maxWait: 15_000, timeout: 30_000 };
+
 export type Candidate = { id: string; name: string; status: UserStatus; timezone: string };
 export type Choice = { user: Candidate | null; reason: string };
 
@@ -155,7 +158,7 @@ export async function autoAssign(workspaceId: string, leadId: string, quiet = fa
       },
     });
     return { lead, choice: { user: owner, reason } as Choice, owner };
-  });
+  }, TX_OPTIONS);
 
   if (done) {
     const { lead, choice, owner } = done;

@@ -2,7 +2,7 @@
 // All state is in the DB. escalate() is safe to run in two workers at once: the conditional update
 // on `version` lets exactly one of them win (F3.8, Q5).
 import { prisma } from "@/lib/db";
-import { ensureConfig, findTarget, levelsOf, loadBusy, loadCandidates, autoAssign } from "./assign";
+import { TX_OPTIONS, ensureConfig, findTarget, levelsOf, loadBusy, loadCandidates, autoAssign } from "./assign";
 import { afterHandover } from "./handover";
 
 /** Returns true if THIS call moved the lead. */
@@ -59,7 +59,7 @@ export async function escalate(workspaceId: string, leadId: string, version: num
     });
     if (target.viaRotation) await tx.assignmentConfig.update({ where: { workspaceId }, data: { rrCursor: target.user.id } });
     return { lead, kind: "moved" as const, reason, fromName, toName: target.user.name, toId: target.user.id };
-  });
+  }, TX_OPTIONS);
 
   if (!done) return false;
   await afterHandover({
