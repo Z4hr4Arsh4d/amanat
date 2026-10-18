@@ -3,6 +3,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
 
 function key() {
+  // The worker (plain `tsx`) does not load .env like Next.js does; load it once if the key is missing.
+  if (!process.env.ENCRYPTION_KEY && typeof process.loadEnvFile === "function") {
+    try { process.loadEnvFile(".env"); } catch { /* no .env file: the error below explains */ }
+  }
   const k = process.env.ENCRYPTION_KEY;
   if (!k) throw new Error("ENCRYPTION_KEY is not set (see .env.example)");
   return createHash("sha256").update(k).digest(); // 32 bytes
