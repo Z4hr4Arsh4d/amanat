@@ -1,12 +1,10 @@
 // P3 owns. AES-256-GCM encryption for API keys / tokens stored in the DB (I5.3).
 // Never return decrypted values to the browser; show mask() instead.
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypto";
+import { ensureEnv } from "./env";
 
 function key() {
-  // The worker (plain `tsx`) does not load .env like Next.js does; load it once if the key is missing.
-  if (!process.env.ENCRYPTION_KEY && typeof process.loadEnvFile === "function") {
-    try { process.loadEnvFile(".env"); } catch { /* no .env file: the error below explains */ }
-  }
+  ensureEnv(); // the worker (plain tsx) does not load .env by itself
   const k = process.env.ENCRYPTION_KEY;
   if (!k) throw new Error("ENCRYPTION_KEY is not set (see .env.example)");
   return createHash("sha256").update(k).digest(); // 32 bytes

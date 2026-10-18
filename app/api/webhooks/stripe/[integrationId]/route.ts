@@ -1,5 +1,10 @@
-// P3 owns. Webhook for stripe. Steps: 1) verify signature  2) dedupe by provider event id
-// 3) process  4) log IntegrationEvent. Webhooks are exempt from the Origin check in middleware.ts.
-export async function POST() {
-  return new Response("not implemented", { status: 501 });
+// P3 owns. Stripe webhook endpoint. Add it in Stripe → Developers → Webhooks with the events listed on /integrations.
+// Steps: 1) verify signature on the raw body  2) dedupe by event id  3) process  4) log IntegrationEvent.
+import { handleStripeWebhook } from "@/lib/integrations/stripe-webhook";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function POST(req: Request, { params }: { params: Promise<{ integrationId: string }> }) {
+  return handleStripeWebhook(req, (await params).integrationId);
 }
