@@ -1,5 +1,7 @@
-import { Placeholder } from "@/components/Placeholder";
+import { requireUserPage } from "@/lib/core/session";
+import { DashboardClient } from "./DashboardClient";
 
-export default function Page() {
-  return <Placeholder title="Dashboard" owner="P2" reqs="F5.1–F5.5" />;
+export default async function Page() {
+  await requireUserPage();
+  return <DashboardClient />;
 }

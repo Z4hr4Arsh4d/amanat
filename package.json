@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
-    "worker": "tsx worker/index.ts",
+    "worker": "tsx --conditions=react-server worker/index.ts",
     "db:push": "prisma db push",
     "db:guard": "prisma db execute --file prisma/sql/audit_guard.sql --schema prisma/schema.prisma",
     "db:setup": "prisma db push && npm run db:guard",
