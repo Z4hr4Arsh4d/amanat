@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import { requireUser, requirePermission } from "@/lib/core/session";
 import { scoped } from "@/lib/core/scoped";
 import { act } from "@/lib/core/action";
-import { HttpError } from "@/lib/core/errors";
+import { HttpError, NotFound } from "@/lib/core/errors";
+import { acknowledge } from "@/lib/leads/acknowledge";
 import { findOrCreateContact, normalizePhone } from "@/lib/leads/contact";
 import { intake } from "@/lib/leads/intake";
 
@@ -13,6 +14,8 @@ export type LeadRow = {
   id: string; contactId: string; contactName: string; source: "WEB_FORM" | "WHATSAPP" | "MANUAL";
   status: "NEW" | "ASSIGNED" | "ACKNOWLEDGED" | "UNASSIGNED" | "CLOSED";
   ownerName: string | null; reason: string | null; createdAt: string;
+  isMine: boolean;
+  msLeft: number | null; // time until the acknowledge deadline, measured on the server so clocks can't disagree
 };
 
 /** Open leads, newest first. People without company-wide access see only their own. */
@@ -35,7 +38,52 @@ export async function listLeads() {
       id: l.id, contactId: l.contactId, contactName: l.contact.name, source: l.source, status: l.status,
       ownerName: l.ownerId ? (name.get(l.ownerId) ?? null) : null,
       reason: l.assignments[0]?.reason ?? null, createdAt: l.createdAt.toISOString(),
+      isMine: l.ownerId === ctx.userId,
+      msLeft: l.status === "ASSIGNED" && l.deadlineAt ? l.deadlineAt.getTime() - Date.now() : null,
     }));
+  });
+}
+
+export type ContactLeadInfo = {
+  lead: { id: string; source: LeadRow["source"]; status: LeadRow["status"]; ownerName: string | null; isMine: boolean; msLeft: number | null; ownerOnLeave: boolean } | null;
+  history: { id: string; kind: string; to: string | null; reason: string; at: string }[];
+};
+
+/** For the contact page's lead box: the latest lead for this contact and who has held it. */
+export async function getContactLead(contactId: string) {
+  return act(async (): Promise<ContactLeadInfo> => {
+    const ctx = await requireUser();
+    requirePermission(ctx, "crm.view");
+    const id = z.string().trim().min(1).max(64).parse(contactId);
+    const db = scoped(ctx);
+    const lead = await db.lead.findFirst({ where: { contactId: id }, orderBy: { createdAt: "desc" }, include: { assignments: { orderBy: { createdAt: "desc" }, take: 20 } } });
+    if (!lead) return { lead: null, history: [] };
+    const ids = [...new Set([lead.ownerId, ...lead.assignments.map((a) => a.toUserId)].filter((x): x is string => !!x))];
+    const users = await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
+    const name = new Map(users.map((u) => [u.id, u.name]));
+    return {
+      lead: {
+        id: lead.id, source: lead.source, status: lead.status, isMine: lead.ownerId === ctx.userId,
+        ownerName: lead.ownerId ? (name.get(lead.ownerId) ?? null) : null, ownerOnLeave: lead.ownerOnLeaveFlag,
+        msLeft: lead.status === "ASSIGNED" && lead.deadlineAt ? lead.deadlineAt.getTime() - Date.now() : null,
+      },
+      history: lead.assignments.map((a) => ({
+        id: a.id, kind: a.kind, to: a.toUserId ? (name.get(a.toUserId) ?? null) : null, reason: a.reason, at: a.createdAt.toISOString(),
+      })),
+    };
+  });
+}
+
+export async function acknowledgeLead(input: { leadId: string }) {
+  return act(async () => {
+    const ctx = await requireUser();
+    requirePermission(ctx, "crm.view");
+    const leadId = z.string().trim().min(1).max(64).parse(input.leadId);
+    if (!(await scoped(ctx).lead.findFirst({ where: { id: leadId }, select: { id: true } }))) throw NotFound();
+    const r = await acknowledge({ workspaceId: ctx.workspaceId, leadId, userId: ctx.userId });
+    if (!r.ok) throw new HttpError(409, r.message);
+    revalidatePath("/leads");
+    return { message: r.message };
   });
 }
 
