@@ -22,7 +22,7 @@ const fetcher = async (url: string) => {
   return j as Resp;
 };
 
-const PROVIDERS: [string, string][] = [["", "All providers"], ["META", "WhatsApp (Meta)"], ["TWILIO", "Twilio"], ["STRIPE", "Stripe"], ["GOOGLE", "Google"], ["TELEGRAM", "Telegram"]];
+const PROVIDERS: [string, string][] = [["", "All providers"], ["WEBCHAT", "Website chat"], ["META", "WhatsApp (Meta)"], ["TWILIO", "Twilio"], ["STRIPE", "Stripe"], ["GOOGLE", "Google"], ["TELEGRAM", "Telegram"]];
 const DIRECTIONS: [string, string][] = [["", "In and out"], ["IN", "Incoming (webhooks)"], ["OUT", "Outgoing (calls)"]];
 const STATUSES: [string, string][] = [["", "Any result"], ["PROCESSED", "Processed"], ["SENT", "Sent"], ["RETRYING", "Retrying"], ["FAILED", "Failed"], ["REJECTED", "Rejected"], ["RECEIVED", "Received"]];
 

@@ -41,7 +41,7 @@ export const StripeForm = z.object({
 });
 
 const provName = (p: Provider) =>
-  p === "TWILIO" ? "Twilio WhatsApp" : p === "META" ? "WhatsApp (Meta)" : p === "STRIPE" ? "Stripe" : p === "GOOGLE" ? "Google Calendar" : "Telegram";
+  p === "WEBCHAT" ? "Website chat" : p === "TWILIO" ? "Twilio WhatsApp" : p === "META" ? "WhatsApp (Meta)" : p === "STRIPE" ? "Stripe" : p === "GOOGLE" ? "Google Calendar" : "Telegram";
 
 export const MetaForm = z.object({
   phoneNumberId: z.string().trim().regex(/^\d{8,20}$/, "Phone number ID is a long number. Copy it from Meta app → WhatsApp → API Setup."),
@@ -216,4 +216,19 @@ export async function testConnection(ctx: Ctx, provider: "TWILIO" | "STRIPE" | "
   await scoped(ctx).integration.update({ where: { id: row.id }, data: { status: "CONNECTED", lastSuccessAt: new Date(), lastError: null } });
   await logEvent({ workspaceId: ctx.workspaceId, provider, direction: "OUT", type: "credentials.check", status: "SENT", attempts: 1, payload: { by: ctx.userId } });
   return { ok: true, message: `${provName(provider)} answered. The connection works.` };
+}
+
+/** Turn the public website chat on or off (audited). It is on by default. */
+export async function setWebchat(ctx: Ctx, enabled: boolean): Promise<ActionResult> {
+  requirePermission(ctx, "integrations.manage");
+  const { setEnabled } = await import("./webchat");
+  const before = await existing(ctx, "WEBCHAT");
+  const wasOn = !before || before.status !== "NOT_CONNECTED";
+  if (wasOn === enabled) return { ok: true, message: enabled ? "The website chat is already on." : "The website chat is already off." };
+  const row = await setEnabled(ctx.workspaceId, enabled);
+  await audit.record({
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, actorLabel: ctx.name, action: enabled ? "integration.connected" : "integration.disconnected",
+    targetType: "Integration", targetId: row.id, before: { provider: "WEBCHAT", on: wasOn }, after: { provider: "WEBCHAT", on: enabled },
+  });
+  return { ok: true, message: enabled ? "Website chat turned on. The customer link works again." : "Website chat turned off. The customer link now shows “Chat is not available”." };
 }

@@ -21,7 +21,7 @@ function hoursLeft(end: string) {
   return h >= 1 ? `${Math.floor(h)} h` : `${Math.max(1, Math.round(h * 60))} min`;
 }
 
-function StatusLine({ m, onRetry, retrying }: { m: Msg; onRetry: () => void; retrying: boolean }) {
+function StatusLine({ m, onRetry, retrying, web }: { m: Msg; onRetry: () => void; retrying: boolean; web: boolean }) {
   if (m.direction === "IN") return <span>Received</span>;
   if (m.status === "FAILED")
     return (
@@ -35,7 +35,9 @@ function StatusLine({ m, onRetry, retrying }: { m: Msg; onRetry: () => void; ret
     );
   if (m.status === "QUEUED")
     return <span className={m.errorReason ? "text-amber-900" : ""}><span aria-hidden="true">⏳ </span>{m.errorReason ?? "Sending…"}</span>;
-  const label = { SENT: "✓ Sent", DELIVERED: "✓✓ Delivered", READ: "✓✓ Read", RECEIVED: "Received" }[m.status] ?? m.status;
+  const label = web
+    ? { SENT: "✓ Sent", DELIVERED: "✓ Sent to the customer's chat", READ: "✓✓ Seen by the customer", RECEIVED: "Received" }[m.status] ?? m.status
+    : { SENT: "✓ Sent", DELIVERED: "✓✓ Delivered", READ: "✓✓ Read", RECEIVED: "Received" }[m.status] ?? m.status;
   return <span>{label}</span>;
 }
 
@@ -45,6 +47,7 @@ export function ThreadView({ thread, onChanged, compact }: { thread: ThreadData;
   useEffect(() => { end.current?.scrollIntoView({ block: "nearest" }); }, [count]);
   const { pending, run } = useRun();
   const assignId = useId();
+  const web = thread.kind === "WEBCHAT";
 
   return (
     <div className="flex min-h-0 min-w-0 flex-col rounded-lg border border-stone-200 bg-white">
@@ -54,11 +57,13 @@ export function ThreadView({ thread, onChanged, compact }: { thread: ThreadData;
             <h2 className="truncate font-semibold">
               <Link href={`/contacts/${thread.contact.id}`} className="hover:underline">{thread.contact.name}</Link>
             </h2>
-            <p className="text-xs text-stone-600">{thread.contact.phone ?? "No phone"} · WhatsApp</p>
+            <p className="text-xs text-stone-600">{thread.contact.phone ?? "No phone"} · {web ? "Website chat" : "WhatsApp"}</p>
           </div>
           <div className="flex flex-wrap gap-1">
             {thread.contact.optedOut && <Chip tone="bad">Opted out</Chip>}
-            {thread.windowEndsAt ? (
+            {web ? (
+              <Chip tone="info" title="The customer is chatting on your website. Replies appear in their chat window at once.">Live website chat</Chip>
+            ) : thread.windowEndsAt ? (
               <Chip tone="ok" title="WhatsApp allows free-form replies for 24 hours after the customer's last message.">Reply window: {hoursLeft(thread.windowEndsAt)} left</Chip>
             ) : (
               <Chip tone="warn" title="WhatsApp only allows template messages more than 24 hours after the customer's last message.">Reply window closed</Chip>
@@ -97,7 +102,7 @@ export function ThreadView({ thread, onChanged, compact }: { thread: ThreadData;
                 <time dateTime={m.createdAt}>{time(m.createdAt)}</time>
               </p>
               <div className="mt-0.5 text-xs text-stone-700">
-                <StatusLine m={m} retrying={pending === m.id} onRetry={() => run(m.id, () => retryMessageAction(m.id), { onOk: onChanged })} />
+                <StatusLine m={m} web={web} retrying={pending === m.id} onRetry={() => run(m.id, () => retryMessageAction(m.id), { onOk: onChanged })} />
               </div>
             </div>
           </li>
@@ -105,12 +110,12 @@ export function ThreadView({ thread, onChanged, compact }: { thread: ThreadData;
         <li ref={end} aria-hidden="true" />
       </ol>
 
-      <Composer conversationId={thread.id} blocked={thread.blocked} windowOpen={!!thread.windowEndsAt} joinCode={thread.joinCode} onSent={onChanged} />
+      <Composer conversationId={thread.id} blocked={thread.blocked} windowOpen={web || !!thread.windowEndsAt} joinCode={thread.joinCode} onSent={onChanged} label={web ? "Reply in the customer's chat" : "Reply on WhatsApp"} />
     </div>
   );
 }
 
-export function Composer(props: { conversationId?: string; contactId?: string; blocked: string | null; windowOpen: boolean; joinCode?: string | null; onSent: () => void }) {
+export function Composer(props: { conversationId?: string; contactId?: string; blocked: string | null; windowOpen: boolean; joinCode?: string | null; onSent: () => void; label?: string }) {
   const [body, setBody] = useState("");
   const [sending, setSending] = useState(false);
   const id = useId();
@@ -149,7 +154,7 @@ export function Composer(props: { conversationId?: string; contactId?: string; b
           {props.joinCode ? ` Sandbox: they must first send “${props.joinCode}” to the sandbox number.` : ""}
         </p>
       )}
-      <label htmlFor={id} className="block text-sm font-medium">Reply on WhatsApp</label>
+      <label htmlFor={id} className="block text-sm font-medium">{props.label ?? "Reply on WhatsApp"}</label>
       <textarea id={id} value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={1600}
         onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); submit(); } }}
         placeholder="Type a message. Enter sends, Shift+Enter adds a line."

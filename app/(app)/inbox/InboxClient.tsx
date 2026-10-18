@@ -9,6 +9,7 @@ import { ThreadView, type ThreadData } from "@/lib/integrations/ui/Thread";
 
 type Item = {
   id: string;
+  kind: "WHATSAPP" | "WEBCHAT";
   contact: { id: string; name: string; phone: string | null; optedOut: boolean };
   assignee: { id: string | null; name: string | null; why: string };
   last: { body: string; direction: "IN" | "OUT"; status: string; at: string } | null;
@@ -55,7 +56,7 @@ export function InboxClient({ initialId }: { initialId: string | null }) {
               <button type="button" onClick={() => setSelected(c.id)} aria-current={selected === c.id ? "true" : undefined}
                 className={`w-full rounded-lg border p-3 text-left text-sm focus:outline-none focus:ring-2 focus:ring-emerald-700 ${selected === c.id ? "border-emerald-600 bg-emerald-50" : "border-stone-200 bg-white hover:bg-stone-50"}`}>
                 <span className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">{c.contact.name}</span>
+                  <span className="truncate font-medium">{c.contact.name} <span className="font-normal text-stone-600">· {c.kind === "WEBCHAT" ? "Website chat" : "WhatsApp"}</span></span>
                   <span className="shrink-0 text-xs text-stone-600"><TimeAgo date={c.lastMessageAt} /></span>
                 </span>
                 <span className="mt-0.5 block truncate text-stone-700">
@@ -72,7 +73,7 @@ export function InboxClient({ initialId }: { initialId: string | null }) {
           ))}
           {list.data && list.data.items.length === 0 && (
             <li className="rounded border border-dashed border-stone-300 p-4 text-center text-sm text-stone-600">
-              {query ? "No conversations match your search." : "No conversations yet. Messages sent to the WhatsApp sandbox number appear here."}
+              {query ? "No conversations match your search." : "No conversations yet. Customers who message you on the website chat (or WhatsApp) appear here. Use “Try it” above to play the customer."}
             </li>
           )}
         </ul>

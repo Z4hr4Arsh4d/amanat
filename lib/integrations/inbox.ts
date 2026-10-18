@@ -84,6 +84,7 @@ export async function listConversations(ctx: Ctx, raw: Record<string, string | u
     total, page: f.page, pages: Math.max(1, Math.ceil(total / PAGE)),
     items: rows.map((c, i) => ({
       id: c.id,
+      kind: c.channel === "WEBCHAT" ? ("WEBCHAT" as const) : ("WHATSAPP" as const),
       contact: { id: c.contact.id, name: c.contact.name, phone: c.contact.phone, optedOut: c.contact.optedOut },
       assignee: { id: assignees[i].id, name: assignees[i].id ? names.get(assignees[i].id!) ?? "Unknown" : null, why: assignees[i].why },
       last: c.messages[0] ? { body: c.messages[0].body.slice(0, 120), direction: c.messages[0].direction, status: c.messages[0].status, at: c.messages[0].createdAt } : null,
@@ -107,8 +108,10 @@ export async function getThread(ctx: Ctx, conversationId: string) {
   const a = effectiveAssignee(c);
   if (a.id === ctx.userId || a.id === null) await db.conversation.update({ where: { id: c.id }, data: { lastReadAt: new Date() } });
 
+  const isWeb = c.channel === "WEBCHAT";
   const lastIn = [...msgs].reverse().find((m) => m.direction === "IN");
-  const windowEndsAt = lastIn ? new Date(lastIn.createdAt.getTime() + WINDOW_MS) : null;
+  // WhatsApp only allows free-form replies for 24h after the customer's last message. Web chat has no such limit.
+  const windowEndsAt = !isWeb && lastIn ? new Date(lastIn.createdAt.getTime() + WINDOW_MS) : null;
   const channel = await activeChannel(ctx.workspaceId);
   const twilio = channel?.provider === "TWILIO" ? await connected<TwilioSecrets, TwilioConfig>(ctx.workspaceId, "TWILIO") : null;
   const canAssign = can(ctx, "leads.reassign");
@@ -117,17 +120,19 @@ export async function getThread(ctx: Ctx, conversationId: string) {
 
   const blocked = c.contact.optedOut
     ? messaging.optedOutText(c.contact)
+    : isWeb ? null
     : !c.contact.phone ? `${c.contact.name} has no phone number. Add one on the contact page.`
     : !channel ? NOT_CONNECTED : null;
 
   return {
     id: c.id,
+    kind: isWeb ? ("WEBCHAT" as const) : ("WHATSAPP" as const),
     contact: { id: c.contact.id, name: c.contact.name, phone: c.contact.phone, optedOut: c.contact.optedOut, optedOutAt: c.contact.optedOutAt },
     assignee: { id: a.id, name: a.id ? names.get(a.id) ?? "Unknown" : null, why: a.why },
     canAssign, team,
     blocked,
     joinCode: twilio?.config.joinCode ?? null,
-    channel: channel?.label ?? null,
+    channel: isWeb ? "Website chat" : channel?.label ?? null,
     windowEndsAt: windowEndsAt && windowEndsAt.getTime() > Date.now() ? windowEndsAt : null,
     messages: msgs.map((m) => ({
       id: m.id, direction: m.direction, body: m.body, status: m.status, errorCode: m.errorCode, errorReason: m.errorReason,
@@ -142,7 +147,7 @@ export async function threadForContact(ctx: Ctx, contactId: string) {
   requirePermission(ctx, "crm.view");
   const contact = await scoped(ctx).contact.findFirst({ where: { id: contactId, deletedAt: null } });
   if (!contact) throw NotFound();
-  const c = await scoped(ctx).conversation.findFirst({ where: { contactId, channel: "WHATSAPP" } });
+  const c = await scoped(ctx).conversation.findFirst({ where: { contactId }, orderBy: { lastMessageAt: "desc" } }); // newest channel first
   if (!c) return { conversationId: null, hidden: false, contact: { id: contact.id, name: contact.name, phone: contact.phone, optedOut: contact.optedOut } };
   const visible = await scoped(ctx).conversation.findFirst({ where: { AND: [{ id: c.id }, visibleWhere(ctx)] }, select: { id: true } });
   if (!visible) return { conversationId: null, hidden: true, contact: { id: contact.id, name: contact.name, phone: contact.phone, optedOut: contact.optedOut } };
@@ -158,18 +163,20 @@ export const SendSchema = z.object({
 export async function sendMessage(ctx: Ctx, input: unknown) {
   const f = SendSchema.parse(input);
   let contactId: string;
+  let conversationId: string | undefined;
   if (f.conversationId) {
     contactId = (await loadVisible(ctx, f.conversationId)).contact.id;
+    conversationId = f.conversationId;
   } else {
     // Starting a new conversation from the contact page: needs CRM edit rights on the contact.
     requirePermission(ctx, "crm.edit");
     const contact = await scoped(ctx).contact.findFirst({ where: { id: f.contactId!, deletedAt: null } });
     if (!contact) throw NotFound();
-    const existing = await scoped(ctx).conversation.findFirst({ where: { contactId: contact.id, channel: "WHATSAPP" } });
-    if (existing) await loadVisible(ctx, existing.id);
+    const existing = await scoped(ctx).conversation.findFirst({ where: { contactId: contact.id }, orderBy: { lastMessageAt: "desc" } });
+    if (existing) { await loadVisible(ctx, existing.id); conversationId = existing.id; }
     contactId = contact.id;
   }
-  return messaging.send({ workspaceId: ctx.workspaceId, contactId, body: f.body, userId: ctx.userId });
+  return messaging.send({ workspaceId: ctx.workspaceId, contactId, body: f.body, userId: ctx.userId, conversationId });
 }
 
 export async function retryMessage(ctx: Ctx, messageId: string) {
@@ -191,6 +198,6 @@ export async function setAssignee(ctx: Ctx, conversationId: string, userId: stri
     workspaceId: ctx.workspaceId, actorId: ctx.userId, actorLabel: ctx.name, action: "conversation.assignee_changed",
     targetType: "Conversation", targetId: c.id, before: { assigneeId: c.assigneeId }, after: { assigneeId: userId },
   });
-  await timeline.add({ workspaceId: ctx.workspaceId, actorId: ctx.userId, type: "assignment", contactId: c.contact.id, summary: `WhatsApp conversation assigned to ${to} by ${ctx.name}` });
+  await timeline.add({ workspaceId: ctx.workspaceId, actorId: ctx.userId, type: "assignment", contactId: c.contact.id, summary: `Conversation assigned to ${to} by ${ctx.name}` });
   return { ok: true as const, message: `Conversation assigned to ${to}.` };
 }
