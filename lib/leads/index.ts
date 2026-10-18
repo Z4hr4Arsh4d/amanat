@@ -1,11 +1,7 @@
 // P2 owns. STUBS — replace bodies (PLAN.md §3). Signatures are CONTRACTS.
-import type { Lead, LeadSource } from "@prisma/client";
-import { prisma } from "@/lib/db";
 
 /** Create a lead for a contact and assign it immediately. Called by the web form, manual entry and P3's WhatsApp webhook. */
-export async function intake(input: { workspaceId: string; contactId: string; source: LeadSource; actorId?: string | null }): Promise<Lead> {
-  return prisma.lead.create({ data: { workspaceId: input.workspaceId, contactId: input.contactId, source: input.source } });
-}
+export { intake } from "./intake";
 
 /** Any recorded action on a contact (note, message, stage change, appointment, call) counts as acknowledgement of that user's open lead. */
 export async function markActed(input: { workspaceId: string; contactId: string; userId: string; action: string }): Promise<void> {
