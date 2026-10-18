@@ -12,6 +12,7 @@ import { withTimeout } from "./outbox";
 import { connected, markError, markSuccess, webhookUrl, type StripeSecrets } from "./store";
 import { stripeClient } from "./stripe";
 import * as messaging from "./messaging";
+import { isValidZone, toZonedParts, zonedToUtc } from "./time";
 
 /** Dashboard figures are in this currency; payments in other currencies are listed but not added to it. */
 export const BASE_CURRENCY = "PKR";
@@ -91,15 +92,20 @@ export const ListQuery = z.object({
 });
 const PAGE = 25;
 
-export function monthRange(now = new Date()) {
-  return { from: new Date(now.getFullYear(), now.getMonth(), 1), to: new Date(now.getFullYear(), now.getMonth() + 1, 1) };
+/** Start and end of the current month in the workspace's time zone (same rule as the dashboard, Q12). */
+export function monthRange(tz = "Asia/Karachi", now = new Date()) {
+  const zone = isValidZone(tz) ? tz : "UTC";
+  const [y, m] = toZonedParts(now, zone).date.split("-").map(Number);
+  const first = (yy: number, mm: number) => zonedToUtc(`${String(yy).padStart(4, "0")}-${String(mm).padStart(2, "0")}-01`, "00:00", zone)!;
+  return { from: first(y, m), to: m === 12 ? first(y + 1, 1) : first(y, m + 1) };
 }
 
 export async function listPayments(ctx: Ctx, raw: Record<string, string | undefined>) {
   requirePermission(ctx, "crm.view");
   const f = ListQuery.parse(raw);
   const db = scoped(ctx);
-  const range = monthRange();
+  const ws = await prisma.workspace.findUnique({ where: { id: ctx.workspaceId }, select: { timezone: true } });
+  const range = monthRange(ws?.timezone);
   const where: Prisma.PaymentWhereInput = {
     AND: [
       visiblePayments(ctx),
