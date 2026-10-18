@@ -2,7 +2,10 @@
 // P3 owns. Server actions for the Integrations page. Next.js checks the Origin of server actions (CSRF).
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
-import { requireUser } from "@/lib/shared/contracts";
+import { requireUser, requirePermission, scoped } from "@/lib/shared/contracts";
+import { NotFound } from "@/lib/core/errors";
+import * as messaging from "@/lib/integrations/messaging";
+import * as outbox from "@/lib/integrations/outbox";
 import { safe, type ActionResult } from "@/lib/integrations/action";
 import * as manage from "@/lib/integrations/manage";
 
@@ -51,5 +54,22 @@ export async function testConnectionAction(provider: unknown): Promise<ActionRes
     const r = await manage.testConnection(ctx, p);
     revalidatePath("/integrations");
     return r;
+  });
+}
+
+/** Retry one failed outgoing call from the sync history (e.g. a failed Telegram alert, I4.4). */
+export async function retryEventAction(eventId: unknown): Promise<ActionResult> {
+  return safe(async () => {
+    const ctx = await requireUser();
+    requirePermission(ctx, "integrations.manage");
+    const id = z.string().min(1).max(40).parse(eventId);
+    const ev = await scoped(ctx).integrationEvent.findFirst({ where: { id } });
+    if (!ev) throw NotFound();
+    if (ev.type === "twilio.message" && typeof (ev.payload as { messageId?: unknown })?.messageId === "string") {
+      const r = await messaging.retry({ workspaceId: ctx.workspaceId, messageId: (ev.payload as { messageId: string }).messageId, userId: ctx.userId });
+      return r.ok ? { ok: true, message: r.error ? `Retrying: ${r.error}` : "Sent again." } : { ok: false, error: r.error ?? "Retry failed." };
+    }
+    const r = await outbox.retryNow(ev.id, ctx.workspaceId);
+    return r.ok ? { ok: true, message: "Sent again." } : { ok: false, error: r.error ?? "Retry failed." };
   });
 }
