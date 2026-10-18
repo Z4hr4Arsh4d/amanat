@@ -1,5 +1,28 @@
-import { Placeholder } from "@/components/Placeholder";
+// P1 owns. F1.3.
+import { requireUserPage, can } from "@/lib/core/session";
+import { scoped } from "@/lib/core/scoped";
+import { NoAccess } from "@/components/ui/NoAccess";
+import { ui } from "@/components/ui/styles";
+import { PERMISSIONS } from "@/lib/shared/permissions";
+import { RolesClient } from "./RolesClient";
 
-export default function Page() {
-  return <Placeholder title="Roles & permissions" owner="P1" reqs="F1.3" />;
+export default async function RolesPage() {
+  const ctx = await requireUserPage();
+  if (!can(ctx, "users.manage")) return <NoAccess what="manage roles" />;
+  const roles = await scoped(ctx).role.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, permissions: true, _count: { select: { users: true } } },
+  });
+  const perms = Object.entries(PERMISSIONS).map(([key, label]) => ({ key, label }));
+  return (
+    <section className="space-y-6">
+      <div>
+        <h1 className={ui.h1}>Roles</h1>
+        <p className={ui.muted}>
+          A role decides what a User can do. Owners and Admins always have every permission.
+        </p>
+      </div>
+      <RolesClient roles={roles.map((r) => ({ id: r.id, name: r.name, permissions: r.permissions, users: r._count.users }))} perms={perms} />
+    </section>
+  );
 }
