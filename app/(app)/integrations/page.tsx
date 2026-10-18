@@ -6,6 +6,7 @@ import { requireUserPage, can, scoped } from "@/lib/shared/contracts";
 import { TelegramIntegrationCard } from "@/components/slots/TelegramIntegrationCard";
 import { appUrl, webhookUrl, type MetaConfig, type StripeConfig, type TwilioConfig } from "@/lib/integrations/store";
 import { metaVerifyToken } from "@/lib/integrations/meta";
+import { faultLabAllowed } from "@/lib/integrations/fault";
 import { Chip, IntegrationStatusChip } from "@/lib/integrations/ui/StatusChip";
 import { TimeAgo } from "@/lib/integrations/ui/TimeAgo";
 import { AutoRefresh } from "@/lib/integrations/ui/AutoRefresh";
@@ -161,11 +162,18 @@ export default async function IntegrationsPage() {
             {!canManage && " You can view them; ask an admin to change them."}
           </p>
         </div>
-        {canSeeHistory && (
-          <Link href="/integrations/history" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
-            Sync history
-          </Link>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {canSeeHistory && (
+            <Link href="/integrations/history" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
+              Sync history
+            </Link>
+          )}
+          {faultLabAllowed(ctx) && (
+            <Link href="/integrations/fault-lab" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
+              Fault lab
+            </Link>
+          )}
+        </div>
       </header>
 
       {localUrl && canManage && (
