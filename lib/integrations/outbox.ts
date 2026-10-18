@@ -51,7 +51,7 @@ export function registerExecutor(type: string, ex: Executor) {
 export function withTimeout<T>(p: Promise<T>, ms = CALL_TIMEOUT_MS, what = "The provider"): Promise<T> {
   let t: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, rej) => {
-    t = setTimeout(() => rej(new TemporaryError(`${what} did not answer within ${ms / 1000}s. We will try again.`, "timeout")), ms);
+    t = setTimeout(() => rej(new TemporaryError(`${what} did not answer within ${ms / 1000}s.`, "timeout")), ms);
   });
   return Promise.race([p, timeout]).finally(() => clearTimeout(t));
 }
@@ -131,7 +131,7 @@ async function attempt(a: {
     if (cl.temporary && attempts < MAX_ATTEMPTS) {
       const delay = BASE_DELAY_MS * 3 ** (attempts - 1);
       const nextAttemptAt = new Date(Date.now() + delay);
-      const error = `${cl.message} (try ${attempts} of ${MAX_ATTEMPTS}; next try in ${Math.round(delay / 1000)}s)`;
+      const error = `${cl.message} Retrying automatically (try ${attempts} of ${MAX_ATTEMPTS}; next try in ${Math.round(delay / 1000)}s).`;
       await prisma.integrationEvent.update({ where: { id: a.eventId }, data: { status: "RETRYING", attempts, nextAttemptAt, error } }).catch(() => {});
       await report({ ok: false, final: false, error: cl.message, code: cl.code, attempts, nextAttemptAt });
       return { ok: false, retrying: true, error: cl.message, code: cl.code, eventId: a.eventId };

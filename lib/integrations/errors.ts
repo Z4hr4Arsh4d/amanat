@@ -18,7 +18,7 @@ export class PermanentError extends Error {
 const TWILIO: Record<string, string> = {
   "20003": "Twilio rejected the Account SID or Auth Token. An admin should check them on the Integrations page.",
   "20404": "Twilio could not find this resource. Check the Account SID and WhatsApp number on the Integrations page.",
-  "20429": "Twilio is receiving too many requests. We will try again shortly.",
+  "20429": "Twilio is receiving too many requests.",
   "21211": "This phone number is not valid. Check the contact's phone number (it must include the country code, e.g. +92…).",
   "21408": "Your Twilio account is not allowed to send to this country. Enable it in Twilio's Geo Permissions.",
   "21606": "The WhatsApp sender number is not valid for this account. Check the sandbox number on the Integrations page.",
@@ -30,7 +30,7 @@ const TWILIO: Record<string, string> = {
   "63007": "Twilio could not find the WhatsApp sender. Check the sandbox number on the Integrations page.",
   "63015": "This phone has not joined the sandbox. Ask the customer to send 'join <your code>' to the sandbox number first.",
   "63016": "This customer has not messaged in the last 24 hours, so WhatsApp only allows template messages. Ask them to message you first.",
-  "63018": "WhatsApp rate limit reached. We will try again shortly.",
+  "63018": "WhatsApp rate limit reached.",
   "63024": "WhatsApp says this recipient is not valid. Check the phone number.",
   "63032": "The customer's WhatsApp could not accept the message. Try again later.",
   "30003": "The customer's phone is switched off or unreachable. Try again later.",
@@ -44,13 +44,13 @@ const TELEGRAM: Record<string, string> = {
   "401": "Telegram rejected the bot token. An admin should paste a new token on the Integrations page.",
   "403": "This employee blocked the bot or never pressed Start. Ask them to open the bot and press Start.",
   "400": "Telegram could not find this chat. Ask the employee to connect Telegram again from their profile.",
-  "429": "Telegram is rate limiting the bot. We will try again shortly.",
+  "429": "Telegram is rate limiting the bot.",
 };
 
 const STRIPE: Record<string, string> = {
   authentication_error: "Stripe rejected the secret key. An admin should check it on the Integrations page.",
-  rate_limit_error: "Stripe is receiving too many requests. We will try again shortly.",
-  api_connection_error: "Could not reach Stripe. We will try again shortly.",
+  rate_limit_error: "Stripe is receiving too many requests.",
+  api_connection_error: "Could not reach Stripe.",
   invalid_request_error: "Stripe did not accept this request. Check the amount and currency.",
   permission_error: "This Stripe key is not allowed to do that. Use a standard test secret key.",
   resource_missing: "Stripe could not find this payment. It may have been created in another Stripe account.",
@@ -60,12 +60,17 @@ const GOOGLE: Record<string, string> = {
   invalid_grant: "Google Calendar access was revoked or expired. The employee must reconnect on My calendar.",
   "401": "Google Calendar access expired. The employee must reconnect on My calendar.",
   "403": "Google refused access to this calendar. Reconnect and allow calendar access.",
-  "429": "Google is rate limiting requests. We will try again shortly.",
+  "429": "Google is rate limiting requests.",
 };
+
+function tableFor(provider: Provider) {
+  return provider === "TWILIO" ? TWILIO : provider === "TELEGRAM" ? TELEGRAM : provider === "STRIPE" ? STRIPE : GOOGLE;
+}
+export const hasExplanation = (provider: Provider, code?: string | number | null) => code != null && String(code) in tableFor(provider);
 
 /** Plain explanation for a provider error code; falls back to the raw message. */
 export function explainError(provider: Provider, code?: string | number | null, fallback?: string): string {
-  const table = provider === "TWILIO" ? TWILIO : provider === "TELEGRAM" ? TELEGRAM : provider === "STRIPE" ? STRIPE : GOOGLE;
+  const table = tableFor(provider);
   const hit = code != null ? table[String(code)] : undefined;
   if (hit) return hit;
   if (fallback) return `${provider[0]}${provider.slice(1).toLowerCase()} said: ${fallback}`;
@@ -87,17 +92,18 @@ export function classify(provider: Provider, e: unknown): Classified {
   if (e instanceof TemporaryError) return { temporary: true, code: e.code?.toString(), message: e.message, providerLevel: true };
   if (e instanceof PermanentError) {
     const code = e.code?.toString();
-    return { temporary: false, code, message: explainError(provider, code, e.message), providerLevel: isAuthCode(code) };
+    // Our own PermanentErrors already carry a plain sentence; provider codes get the table's explanation.
+    return { temporary: false, code, message: hasExplanation(provider, code) ? explainError(provider, code) : e.message, providerLevel: isAuthCode(code) };
   }
   const status: number | undefined = err.status ?? err.statusCode ?? err.response?.status;
   const code: string | undefined = (err.code ?? err.type ?? err.raw?.code)?.toString();
   const cause = err.cause?.code?.toString();
 
   if (err.name === "AbortError" || err.name === "TimeoutError" || NETWORK_CODES.has(code ?? "") || NETWORK_CODES.has(cause ?? "")) {
-    return { temporary: true, code: code ?? cause, message: `Could not reach ${nice(provider)} (network problem or timeout). We will try again.`, providerLevel: true };
+    return { temporary: true, code: code ?? cause, message: `Could not reach ${nice(provider)} (network problem or timeout).`, providerLevel: true };
   }
   if (status === 429 || (status && status >= 500) || TEMP_PROVIDER_CODES.has(code ?? "")) {
-    return { temporary: true, code: code ?? String(status), message: explainError(provider, code ?? status, `${nice(provider)} is having trouble (${status ?? code}). We will try again.`), providerLevel: true };
+    return { temporary: true, code: code ?? String(status), message: explainError(provider, code ?? status, `${nice(provider)} is having trouble (${status ?? code}).`), providerLevel: true };
   }
   const authLike = status === 401 || isAuthCode(code);
   return {
