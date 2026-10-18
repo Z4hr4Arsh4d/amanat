@@ -12,7 +12,7 @@ import { FilterBar } from "@/components/slots/FilterBar";
 import { PAGE_SIZE, nameMap, pageFrom, qFrom, teamOptions } from "@/lib/crm/people";
 import { allOpportunityFields, pipelinesWithStages } from "@/lib/crm/pipelines";
 import { formatMoney, serializeOpportunity } from "@/lib/crm/serialize";
-import { MoveStage } from "./MoveStage";
+import { Board } from "./Board";
 import { OpportunityCreateForm } from "./OpportunityCreateForm";
 
 export default async function OpportunitiesPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
@@ -98,30 +98,11 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
       {stageFilter && <p className="text-sm">Filtered by stage · <Link href={tab(view).replace(/&?stage=[^&]*/, "")} className="underline">clear</Link></p>}
 
       {view === "board" ? (
-        <div className="overflow-x-auto pb-2">
-          <div className="flex min-w-max gap-3">
-            {stages.map((s) => {
-              const col = items.filter((o) => o.stageId === s.id);
-              return (
-                <section key={s.id} aria-labelledby={`col-${s.id}`} className="w-72 shrink-0 rounded-xl border border-stone-200 bg-stone-100 p-3">
-                  <h2 id={`col-${s.id}`} className="mb-2 text-sm font-semibold">
-                    {s.kind === "WON" ? "🏆 " : s.kind === "LOST" ? "✗ " : ""}{s.name} <span className="font-normal text-stone-600">({col.length})</span>
-                  </h2>
-                  <ul className="space-y-2">
-                    {col.map((o) => (
-                      <li key={o.id} className="space-y-2 rounded-lg border border-stone-200 bg-white p-3 text-sm shadow-sm">
-                        <Link href={`/opportunities/${o.id}`} className="block break-words font-medium text-emerald-800 underline">{o.title}</Link>
-                        <p className="break-words text-stone-600">{o.contactName} · {formatMoney(o.value, o.currency, o.valueMasked)}</p>
-                        {canEdit && <MoveStage opportunityId={o.id} version={o.version} stageId={o.stageId} stages={stages} />}
-                      </li>
-                    ))}
-                    {col.length === 0 && <li className="text-xs text-stone-500">Empty</li>}
-                  </ul>
-                </section>
-              );
-            })}
-          </div>
-        </div>
+        <Board
+          stages={stages}
+          items={items.map((o) => ({ id: o.id, title: o.title, contactName: o.contactName, money: formatMoney(o.value, o.currency, o.valueMasked), stageId: o.stageId, version: o.version }))}
+          canEdit={canEdit}
+        />
       ) : items.length === 0 ? (
         <p className={ui.muted}>No opportunities found.</p>
       ) : (

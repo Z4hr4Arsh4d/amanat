@@ -8,7 +8,7 @@ import { act } from "@/lib/core/action";
 import { Conflict, HttpError, NotFound } from "@/lib/core/errors";
 import { activeFields, diffValues, validateCustomFields } from "@/lib/crm/fields";
 import { normalizePhone } from "@/lib/crm/phone";
-import { auditAs } from "@/lib/crm/log";
+import { softDeleteContact } from "@/lib/crm/contacts";
 import { CustomIn, Id, NullableId, Version } from "@/lib/crm/schemas";
 import * as timeline from "@/lib/crm/timeline";
 import { leads } from "@/lib/shared/contracts";
@@ -118,23 +118,7 @@ export async function deleteContact(input: { contactId: string; version: number 
     const ctx = await requireUser();
     requirePermission(ctx, "crm.delete");
     const data = z.object({ contactId: Id, version: Version }).parse(input);
-    const db = scoped(ctx);
-    const cur = await db.contact.findFirst({ where: { id: data.contactId, deletedAt: null } });
-    if (!cur) throw NotFound();
-    const now = new Date();
-    const opps = await db.$transaction(async (tx) => {
-      const r = await tx.contact.updateMany({
-        where: { id: cur.id, workspaceId: ctx.workspaceId, version: data.version, deletedAt: null },
-        data: { deletedAt: now, version: { increment: 1 } },
-      });
-      if (r.count === 0) throw Conflict();
-      const o = await tx.opportunity.updateMany({
-        where: { contactId: cur.id, workspaceId: ctx.workspaceId, deletedAt: null },
-        data: { deletedAt: now, version: { increment: 1 } },
-      });
-      return o.count;
-    });
-    await auditAs(ctx, "contact.deleted", "Contact", cur.id, { name: cur.name, phone: cur.phone, email: cur.email, opportunitiesDeleted: opps }, null);
+    await softDeleteContact(ctx, data.contactId, data.version);
     revalidatePath("/contacts");
     revalidatePath("/opportunities");
     return null;

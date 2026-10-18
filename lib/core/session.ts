@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 import type { Level } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { ALL_PERMISSIONS, type Permission } from "@/lib/shared/permissions";
+import { ALL_PERMISSIONS, PERMISSIONS, type Permission } from "@/lib/shared/permissions";
 import { Forbidden, Unauthorized } from "./errors";
 
 export const SESSION_COOKIE = "amanat_session";
@@ -85,5 +85,8 @@ export function can(ctx: Ctx, p: Permission) {
 
 /** Server-side permission check (F1.5). Owner and Admin have every permission; Users get their role's. */
 export function requirePermission(ctx: Ctx, p: Permission) {
-  if (!can(ctx, p)) throw Forbidden(p);
+  if (!can(ctx, p)) {
+    const label = PERMISSIONS[p];
+    throw Forbidden(label.charAt(0).toLowerCase() + label.slice(1)); // e.g. "delete CRM records"
+  }
 }
