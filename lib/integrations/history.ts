@@ -5,7 +5,7 @@ import { can, scoped, type Ctx } from "@/lib/shared/contracts";
 import { Forbidden } from "@/lib/core/errors";
 
 export const HistoryQuery = z.object({
-  provider: z.enum(["TWILIO", "STRIPE", "GOOGLE", "TELEGRAM"]).optional().catch(undefined),
+  provider: z.enum(["TWILIO", "STRIPE", "GOOGLE", "TELEGRAM", "META"]).optional().catch(undefined),
   direction: z.enum(["IN", "OUT"]).optional().catch(undefined),
   status: z.enum(["RECEIVED", "PROCESSED", "REJECTED", "FAILED", "RETRYING", "SENT"]).optional().catch(undefined),
   q: z.string().trim().max(100).optional().catch(undefined),

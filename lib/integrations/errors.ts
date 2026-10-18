@@ -56,6 +56,24 @@ const STRIPE: Record<string, string> = {
   resource_missing: "Stripe could not find this payment. It may have been created in another Stripe account.",
 };
 
+const META: Record<string, string> = {
+  "190": "Meta rejected the access token (it may have expired; tokens from the API Setup page last 24 hours). An admin should paste a new token on the Integrations page.",
+  "10": "This access token is missing WhatsApp permissions. Create it with whatsapp_business_messaging and whatsapp_business_management.",
+  "100": "Meta did not accept this request. Check the Phone number ID on the Integrations page.",
+  "131030": "This phone is not on the test number's allowed list. Add it in the Meta app → WhatsApp → API Setup → “To” numbers (up to 5).",
+  "131047": "This customer has not messaged in the last 24 hours, so WhatsApp only allows template messages. Ask them to message you first.",
+  "131026": "WhatsApp could not deliver this message. The number may not use WhatsApp, or the customer must accept the latest WhatsApp terms.",
+  "131021": "The sender and the recipient are the same number.",
+  "131049": "WhatsApp chose not to deliver this message to keep the customer's experience healthy. Try again later.",
+  "131051": "This message type is not supported.",
+  "131056": "Too many messages to this customer in a short time. Retrying shortly.",
+  "130429": "WhatsApp rate limit reached. Retrying shortly.",
+  "131000": "WhatsApp had an unknown problem sending this message. Try again.",
+  "131016": "WhatsApp is temporarily unavailable. Retrying shortly.",
+  "133010": "This phone number is not registered with WhatsApp Cloud API yet. Finish setup in the Meta app.",
+  "368": "Meta temporarily blocked this account for policy reasons. Check the Meta Business account.",
+};
+
 const GOOGLE: Record<string, string> = {
   invalid_grant: "Google Calendar access was revoked or expired. The employee must reconnect on My calendar.",
   "401": "Google Calendar access expired. The employee must reconnect on My calendar.",
@@ -64,7 +82,7 @@ const GOOGLE: Record<string, string> = {
 };
 
 function tableFor(provider: Provider) {
-  return provider === "TWILIO" ? TWILIO : provider === "TELEGRAM" ? TELEGRAM : provider === "STRIPE" ? STRIPE : GOOGLE;
+  return provider === "TWILIO" ? TWILIO : provider === "TELEGRAM" ? TELEGRAM : provider === "STRIPE" ? STRIPE : provider === "META" ? META : GOOGLE;
 }
 export const hasExplanation = (provider: Provider, code?: string | number | null) => code != null && String(code) in tableFor(provider);
 
@@ -78,7 +96,7 @@ export function explainError(provider: Provider, code?: string | number | null, 
 }
 
 const NETWORK_CODES = new Set(["ECONNRESET", "ECONNREFUSED", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN", "EPIPE", "UND_ERR_CONNECT_TIMEOUT", "UND_ERR_SOCKET"]);
-const TEMP_PROVIDER_CODES = new Set(["20429", "63018", "rate_limit_error", "api_connection_error", "lock_timeout"]);
+const TEMP_PROVIDER_CODES = new Set(["20429", "63018", "rate_limit_error", "api_connection_error", "lock_timeout", "130429", "131056", "131016", "80007", "4", "2"]);
 
 export type Classified = { temporary: boolean; code?: string; message: string; providerLevel: boolean };
 
@@ -115,7 +133,8 @@ export function classify(provider: Provider, e: unknown): Classified {
 }
 
 function isAuthCode(code?: string) {
-  return code === "20003" || code === "authentication_error" || code === "invalid_grant" || code === "401";
+  return code === "20003" || code === "authentication_error" || code === "invalid_grant" || code === "401" || code === "190";
 }
 
-export const nice = (p: Provider) => (p === "TWILIO" ? "Twilio" : p === "STRIPE" ? "Stripe" : p === "GOOGLE" ? "Google" : "Telegram");
+export const nice = (p: Provider) =>
+  p === "TWILIO" ? "Twilio" : p === "STRIPE" ? "Stripe" : p === "GOOGLE" ? "Google" : p === "META" ? "WhatsApp (Meta)" : "Telegram";

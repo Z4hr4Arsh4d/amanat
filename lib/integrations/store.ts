@@ -15,7 +15,7 @@ export function appUrl() {
   return (process.env.APP_URL ?? "http://localhost:3000").replace(/\/+$/, "");
 }
 
-export function webhookUrl(provider: "twilio" | "stripe" | "telegram", integrationId: string, suffix = "") {
+export function webhookUrl(provider: "twilio" | "stripe" | "telegram" | "whatsapp", integrationId: string, suffix = "") {
   return `${appUrl()}/api/webhooks/${provider}/${integrationId}${suffix}`;
 }
 
@@ -60,3 +60,13 @@ export async function markError(workspaceId: string, provider: Provider, message
     })
     .catch(() => {});
 }
+
+export type MetaSecrets = { accessToken: string; appSecret: string };
+export type MetaConfig = {
+  phoneNumberId: string;
+  wabaId?: string;
+  displayPhone?: string;
+  verifiedName?: string;
+  accessTokenMasked?: string;
+  appSecretMasked?: string;
+};

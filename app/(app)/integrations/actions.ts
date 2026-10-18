@@ -9,12 +9,21 @@ import * as outbox from "@/lib/integrations/outbox";
 import { safe, type ActionResult } from "@/lib/integrations/action";
 import * as manage from "@/lib/integrations/manage";
 
-const ProviderSchema = z.enum(["TWILIO", "STRIPE", "GOOGLE", "TELEGRAM"], { message: "Unknown integration." });
+const ProviderSchema = z.enum(["TWILIO", "STRIPE", "GOOGLE", "TELEGRAM", "META"], { message: "Unknown integration." });
 
 export async function saveTwilioAction(input: unknown): Promise<ActionResult> {
   return safe(async () => {
     const ctx = await requireUser();
     const r = await manage.saveTwilio(ctx, input);
+    revalidatePath("/integrations");
+    return r;
+  });
+}
+
+export async function saveMetaAction(input: unknown): Promise<ActionResult> {
+  return safe(async () => {
+    const ctx = await requireUser();
+    const r = await manage.saveMeta(ctx, input);
     revalidatePath("/integrations");
     return r;
   });
@@ -50,7 +59,7 @@ export async function disconnectAction(provider: unknown): Promise<ActionResult>
 export async function testConnectionAction(provider: unknown): Promise<ActionResult> {
   return safe(async () => {
     const ctx = await requireUser();
-    const p = z.enum(["TWILIO", "STRIPE"]).parse(provider);
+    const p = z.enum(["TWILIO", "STRIPE", "META"]).parse(provider);
     const r = await manage.testConnection(ctx, p);
     revalidatePath("/integrations");
     return r;
@@ -65,7 +74,7 @@ export async function retryEventAction(eventId: unknown): Promise<ActionResult> 
     const id = z.string().min(1).max(40).parse(eventId);
     const ev = await scoped(ctx).integrationEvent.findFirst({ where: { id } });
     if (!ev) throw NotFound();
-    if (ev.type === "twilio.message" && typeof (ev.payload as { messageId?: unknown })?.messageId === "string") {
+    if ((ev.type === "twilio.message" || ev.type === "meta.message") && typeof (ev.payload as { messageId?: unknown })?.messageId === "string") {
       const r = await messaging.retry({ workspaceId: ctx.workspaceId, messageId: (ev.payload as { messageId: string }).messageId, userId: ctx.userId });
       return r.ok ? { ok: true, message: r.error ? `Retrying: ${r.error}` : "Sent again." } : { ok: false, error: r.error ?? "Retry failed." };
     }

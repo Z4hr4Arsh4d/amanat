@@ -4,11 +4,21 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { leads, timeline } from "@/lib/shared/contracts";
 import { sendRegistered } from "./outbox";
-import { connected, type TwilioConfig, type TwilioSecrets } from "./store";
+import { connected } from "./store";
 import "./twilio"; // registers the "twilio.message" executor
+import "./meta"; // registers the "meta.message" executor
 
 const WINDOW_MS = 24 * 3600_000;
 const fmtDate = (d: Date) => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+/** Which WhatsApp provider this workspace uses. Meta (free) wins when both are connected. */
+export async function activeChannel(workspaceId: string) {
+  if (await connected(workspaceId, "META")) return { provider: "META" as const, type: "meta.message", label: "WhatsApp (Meta)" };
+  if (await connected(workspaceId, "TWILIO")) return { provider: "TWILIO" as const, type: "twilio.message", label: "Twilio WhatsApp" };
+  return null;
+}
+
+export const NOT_CONNECTED = "WhatsApp is not connected. An admin can connect it on the Integrations page.";
 
 export function optedOutText(c: { name: string; optedOutAt: Date | null }) {
   return `${c.name} opted out${c.optedOutAt ? ` on ${fmtDate(c.optedOutAt)}` : ""}. Messages are blocked to respect their choice.`;
@@ -38,8 +48,8 @@ export async function send(input: { workspaceId: string; contactId: string; body
     if (!contact) return { ok: false, error: "Contact not found." };
     if (contact.optedOut) return { ok: false, error: optedOutText(contact) };
     if (!contact.phone) return { ok: false, error: `${contact.name} has no phone number. Add one on the contact page.` };
-    const conn = await connected<TwilioSecrets, TwilioConfig>(input.workspaceId, "TWILIO");
-    if (!conn) return { ok: false, error: "WhatsApp is not connected. An admin can connect Twilio on the Integrations page." };
+    const channel = await activeChannel(input.workspaceId);
+    if (!channel) return { ok: false, error: NOT_CONNECTED };
 
     const convo = await ensureConversation(input.workspaceId, contact.id);
     const msg = await prisma.message.create({
@@ -49,8 +59,8 @@ export async function send(input: { workspaceId: string; contactId: string; body
 
     const r = await sendRegistered({
       workspaceId: input.workspaceId,
-      provider: "TWILIO",
-      type: "twilio.message",
+      provider: channel.provider,
+      type: channel.type,
       payload: { messageId: msg.id, conversationId: convo.id, to: contact.phone, preview: body.slice(0, 80) },
     });
 
@@ -81,6 +91,8 @@ export async function retry(input: { workspaceId: string; messageId: string; use
   if (msg.status !== "FAILED") return { ok: false, error: "Only failed messages can be retried." };
   const c = msg.conversation.contact;
   if (c.optedOut) return { ok: false, error: optedOutText(c) };
+  const channel = await activeChannel(input.workspaceId);
+  if (!channel) return { ok: false, error: NOT_CONNECTED };
   // A message Twilio accepted but later failed (e.g. not delivered) gets a fresh send: clear the old reference.
   const { count } = await prisma.message.updateMany({
     where: { id: msg.id, status: "FAILED" },
@@ -89,8 +101,8 @@ export async function retry(input: { workspaceId: string; messageId: string; use
   if (count === 0) return { ok: false, error: "This message is already being retried." };
   const r = await sendRegistered({
     workspaceId: input.workspaceId,
-    provider: "TWILIO",
-    type: "twilio.message",
+    provider: channel.provider,
+    type: channel.type,
     payload: { messageId: msg.id, conversationId: msg.conversationId, to: c.phone, preview: msg.body.slice(0, 80), retryBy: input.userId },
   });
   return r.ok || r.retrying ? { ok: true, error: r.error } : { ok: false, error: r.error };

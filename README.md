@@ -52,23 +52,28 @@ _TODO: how to create the bot, link a user, demo timers._
 ### P3 — Twilio, Stripe, Google
 Credentials are entered per workspace on **/integrations** (Owner/Admin, or anyone with "Connect, change or remove integrations"). They are checked with the provider before saving, stored AES-256-GCM encrypted (`ENCRYPTION_KEY`), and only ever shown masked. Every change is in the audit history.
 
-**Twilio WhatsApp sandbox**
-1. Twilio console → Messaging → Try it out → *Send a WhatsApp message*. Each test phone sends the join phrase (e.g. `join happy-tiger`) to `+1 415 523 8886`.
-2. On /integrations → WhatsApp: paste Account SID + Auth Token, keep `whatsapp:+14155238886`, add the join phrase. Save (we call Twilio to check them).
-3. Copy the **Webhook URL** shown on the card into *Sandbox settings → When a message comes in* (POST). Delivery status callbacks are set automatically per message.
-4. `APP_URL` must be the exact public https URL (ngrok or Railway). Signatures are checked against it, so a wrong `APP_URL` makes every webhook show as *Rejected: Invalid signature* in the sync history.
+**WhatsApp — Meta Cloud API (free, recommended).** Needs only a Facebook account; no card.
+1. developers.facebook.com → *Create app* → type **Business** → add the **WhatsApp** product. Meta gives you a free **test number**.
+2. WhatsApp → **API Setup**: copy the **Phone number ID** and the **temporary access token** (lasts 24h). Under "To", add each demo phone (max 5) and confirm the code WhatsApp sends.
+   For a token that doesn't expire: business.facebook.com → Settings → System users → add (Admin) → *Assign assets* (your app, full control) → *Generate token* with `whatsapp_business_messaging` + `whatsapp_business_management`.
+3. App settings → **Basic** → copy the **App secret**.
+4. On /integrations → *WhatsApp (Meta Cloud API)*: paste Phone number ID, token, App secret → *Connect* (we check them with Meta).
+5. Copy the card's **Callback URL** and **Verify token** into Meta app → WhatsApp → **Configuration** → Webhook → *Edit* → *Verify and save*. Then *Manage* webhook fields → subscribe **messages**. (`APP_URL` must be public https: ngrok or Railway.)
+6. From a phone on the "To" list, send a WhatsApp message to the test number → it appears in /inbox as a lead with the auto-reply.
 
-What happens: a message from an unknown number creates a contact + a WhatsApp lead (and the auto-reply "… will reply within N minutes" if *Auto-reply to customer* is on). A known number attaches to its contact; a new lead is only created if it has no open lead. `STOP` opts the customer out (composer is blocked with the reason), `START` opts back in. Duplicate deliveries are ignored; forged requests get 403 and are logged + audited.
+Signatures: `X-Hub-Signature-256` (HMAC-SHA256 of the raw body with the App secret). Statuses (sent/delivered/read/failed) arrive on the same webhook. When Meta and Twilio are both connected, Meta is used for sending.
 
-Limits: the sandbox only reaches phones that joined it; free-form replies only within 24h of the customer's last message (error 63016 otherwise, shown in plain words).
+**WhatsApp — Twilio sandbox (paid alternative).** Twilio console → Messaging → Try it out → WhatsApp; each phone sends the join phrase. Paste Account SID + Auth Token on the Twilio card and put its Webhook URL in *Sandbox settings → When a message comes in*.
 
-**Testing without a Twilio account** (dev only; signs requests exactly like Twilio):
+What happens (either provider): a message from an unknown number creates a contact + a WhatsApp lead (and the auto-reply "… will reply within N minutes" if *Auto-reply to customer* is on). A known number attaches to its contact; a new lead is only created if it has no open lead. `STOP` opts the customer out (composer blocked with the reason), `START` opts back in. Duplicate deliveries are ignored; forged requests get 403 and are logged + audited. Free-form replies only within 24h of the customer's last message (shown in plain words otherwise).
+
+**Testing without any WhatsApp account** (dev only; signs requests exactly like Meta / Twilio):
 ```bash
-npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts setup              # fake Twilio connection for sunrise-solar
-npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts message +923001234567 "Hi, need a quote" "Ahmed Raza"
-npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts duplicate          # same MessageSid again → ignored
-npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts forged             # bad signature → 403, logged, audited
-npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts status <messageId> failed 63016
+npx tsx --env-file=.env lib/integrations/dev/simulate-whatsapp.ts setup meta         # fake Meta connection for sunrise-solar (or: setup twilio)
+npx tsx --env-file=.env lib/integrations/dev/simulate-whatsapp.ts message +923001234567 "Hi, need a quote" "Ahmed Raza"
+npx tsx --env-file=.env lib/integrations/dev/simulate-whatsapp.ts duplicate          # same MessageSid again → ignored
+npx tsx --env-file=.env lib/integrations/dev/simulate-whatsapp.ts forged             # bad signature → 403, logged, audited
+npx tsx --env-file=.env lib/integrations/dev/simulate-whatsapp.ts status <messageId> failed 131047
 ```
 Replies sent from the Inbox fail with the fake credentials; that shows the retry + failed-message handling. Connect real credentials on /integrations to replace it.
 

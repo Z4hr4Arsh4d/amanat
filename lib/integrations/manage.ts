@@ -7,7 +7,8 @@ import { classify } from "./errors";
 import { logEvent } from "./log";
 import { withTimeout } from "./outbox";
 import { encryptJson, mask } from "./secrets";
-import { readSecrets, type StripeSecrets, type TwilioConfig, type TwilioSecrets } from "./store";
+import { readSecrets, type MetaConfig, type MetaSecrets, type StripeSecrets, type TwilioConfig, type TwilioSecrets } from "./store";
+import { verifyMetaCredentials } from "./meta";
 import { verifyTwilioCredentials } from "./twilio";
 import { verifyStripeKey } from "./stripe";
 import { toE164 } from "./phone";
@@ -39,7 +40,49 @@ export const StripeForm = z.object({
   ]),
 });
 
-const provName = (p: Provider) => (p === "TWILIO" ? "Twilio WhatsApp" : p === "STRIPE" ? "Stripe" : p === "GOOGLE" ? "Google Calendar" : "Telegram");
+const provName = (p: Provider) =>
+  p === "TWILIO" ? "Twilio WhatsApp" : p === "META" ? "WhatsApp (Meta)" : p === "STRIPE" ? "Stripe" : p === "GOOGLE" ? "Google Calendar" : "Telegram";
+
+export const MetaForm = z.object({
+  phoneNumberId: z.string().trim().regex(/^\d{8,20}$/, "Phone number ID is a long number. Copy it from Meta app → WhatsApp → API Setup."),
+  wabaId: z.union([z.literal(""), z.string().trim().regex(/^\d{8,20}$/, "WhatsApp Business Account ID is a long number (API Setup page).")]).optional().default(""),
+  accessToken: z.union([z.literal(""), z.string().trim().regex(/^EA[A-Za-z0-9]{40,}$/, "The access token starts with EA and is very long. Copy it from API Setup (or a System User token).")]),
+  appSecret: z.union([z.literal(""), z.string().trim().regex(/^[0-9a-fA-F]{32}$/, "The App secret has 32 letters and numbers. Find it in Meta app → App settings → Basic.")]),
+});
+
+export async function saveMeta(ctx: Ctx, input: unknown): Promise<ActionResult> {
+  requirePermission(ctx, "integrations.manage");
+  const f = MetaForm.parse(input);
+  const before = await existing(ctx, "META");
+  const old = readSecrets<MetaSecrets>(before);
+  const secrets: MetaSecrets = { accessToken: f.accessToken || old?.accessToken || "", appSecret: f.appSecret || old?.appSecret || "" };
+  if (!secrets.accessToken) return { ok: false, error: "Enter the access token from Meta app → WhatsApp → API Setup." };
+  if (!secrets.appSecret) return { ok: false, error: "Enter the App secret from Meta app → App settings → Basic. It is needed to check that webhooks really come from Meta." };
+  let info: { display_phone_number?: string; verified_name?: string };
+  try {
+    info = await withTimeout(verifyMetaCredentials(f.phoneNumberId, secrets.accessToken), 10_000, "Meta");
+  } catch (e) {
+    return failedCheck(ctx, "META", e);
+  }
+  const publicConfig: MetaConfig = {
+    phoneNumberId: f.phoneNumberId, wabaId: f.wabaId || undefined, displayPhone: info.display_phone_number, verifiedName: info.verified_name,
+    accessTokenMasked: mask(secrets.accessToken), appSecretMasked: mask(secrets.appSecret),
+  };
+  const row = await scoped(ctx).integration.upsert({
+    where: { workspaceId_provider: { workspaceId: ctx.workspaceId, provider: "META" } },
+    create: { workspaceId: ctx.workspaceId, provider: "META", status: "CONNECTED", secrets: encryptJson(secrets), publicConfig, lastSuccessAt: new Date() },
+    update: { status: "CONNECTED", secrets: encryptJson(secrets), publicConfig, lastSuccessAt: new Date(), lastError: null },
+  });
+  await logEvent({ workspaceId: ctx.workspaceId, provider: "META", direction: "OUT", type: "credentials.check", status: "SENT", attempts: 1, payload: { by: ctx.userId } });
+  const wasConnected = before && before.status !== "NOT_CONNECTED";
+  await audit.record({
+    workspaceId: ctx.workspaceId, actorId: ctx.userId, actorLabel: ctx.name,
+    action: wasConnected ? "integration.updated" : "integration.connected", targetType: "Integration", targetId: row.id,
+    before: wasConnected ? { provider: "META", ...(before.publicConfig as object) } : null,
+    after: { provider: "META", ...publicConfig },
+  });
+  return { ok: true, message: wasConnected ? "WhatsApp settings saved and checked." : `WhatsApp connected (${info.display_phone_number ?? f.phoneNumberId}). Now add the webhook in the Meta app.` };
+}
 
 async function existing(ctx: Ctx, provider: Provider) {
   return scoped(ctx).integration.findUnique({ where: { workspaceId_provider: { workspaceId: ctx.workspaceId, provider } } });
@@ -146,12 +189,17 @@ export async function disconnect(ctx: Ctx, provider: Provider): Promise<ActionRe
 }
 
 /** "Test connection" button: one real call to the provider, recorded in the history. */
-export async function testConnection(ctx: Ctx, provider: "TWILIO" | "STRIPE"): Promise<ActionResult> {
+export async function testConnection(ctx: Ctx, provider: "TWILIO" | "STRIPE" | "META"): Promise<ActionResult> {
   requirePermission(ctx, "integrations.manage");
   const row = await existing(ctx, provider);
   if (!row || row.status === "NOT_CONNECTED") return { ok: false, error: `${provName(provider)} is not connected yet.` };
   try {
-    if (provider === "TWILIO") {
+    if (provider === "META") {
+      const s = readSecrets<MetaSecrets>(row);
+      const cfg = row.publicConfig as Partial<MetaConfig>;
+      if (!s || !cfg.phoneNumberId) return { ok: false, error: "The saved credentials cannot be read. Enter them again and save." };
+      await withTimeout(verifyMetaCredentials(cfg.phoneNumberId, s.accessToken), 10_000, "Meta");
+    } else if (provider === "TWILIO") {
       const s = readSecrets<TwilioSecrets>(row);
       if (!s) return { ok: false, error: "The saved credentials cannot be read. Enter them again and save." };
       await withTimeout(verifyTwilioCredentials(s), 10_000, "Twilio");

@@ -6,6 +6,7 @@ import type { Prisma } from "@prisma/client";
 import { audit, can, requirePermission, scoped, timeline, type Ctx } from "@/lib/shared/contracts";
 import { NotFound } from "@/lib/core/errors";
 import { connected, type TwilioConfig, type TwilioSecrets } from "./store";
+import { activeChannel, NOT_CONNECTED } from "./messaging";
 import * as messaging from "./messaging";
 
 const OPEN = { in: ["NEW", "ASSIGNED", "ACKNOWLEDGED", "UNASSIGNED"] as ("NEW" | "ASSIGNED" | "ACKNOWLEDGED" | "UNASSIGNED")[] };
@@ -108,7 +109,8 @@ export async function getThread(ctx: Ctx, conversationId: string) {
 
   const lastIn = [...msgs].reverse().find((m) => m.direction === "IN");
   const windowEndsAt = lastIn ? new Date(lastIn.createdAt.getTime() + WINDOW_MS) : null;
-  const conn = await connected<TwilioSecrets, TwilioConfig>(ctx.workspaceId, "TWILIO");
+  const channel = await activeChannel(ctx.workspaceId);
+  const twilio = channel?.provider === "TWILIO" ? await connected<TwilioSecrets, TwilioConfig>(ctx.workspaceId, "TWILIO") : null;
   const canAssign = can(ctx, "leads.reassign");
   const names = await userNames(ctx, [a.id, ...msgs.map((m) => m.sentById)]);
   const team = canAssign ? await db.user.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true, status: true } }) : [];
@@ -116,7 +118,7 @@ export async function getThread(ctx: Ctx, conversationId: string) {
   const blocked = c.contact.optedOut
     ? messaging.optedOutText(c.contact)
     : !c.contact.phone ? `${c.contact.name} has no phone number. Add one on the contact page.`
-    : !conn ? "WhatsApp is not connected. An admin can connect Twilio on the Integrations page." : null;
+    : !channel ? NOT_CONNECTED : null;
 
   return {
     id: c.id,
@@ -124,7 +126,8 @@ export async function getThread(ctx: Ctx, conversationId: string) {
     assignee: { id: a.id, name: a.id ? names.get(a.id) ?? "Unknown" : null, why: a.why },
     canAssign, team,
     blocked,
-    joinCode: conn?.config.joinCode ?? null,
+    joinCode: twilio?.config.joinCode ?? null,
+    channel: channel?.label ?? null,
     windowEndsAt: windowEndsAt && windowEndsAt.getTime() > Date.now() ? windowEndsAt : null,
     messages: msgs.map((m) => ({
       id: m.id, direction: m.direction, body: m.body, status: m.status, errorCode: m.errorCode, errorReason: m.errorReason,

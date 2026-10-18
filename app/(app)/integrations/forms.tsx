@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRun } from "@/lib/integrations/ui/useRun";
 import { Spinner } from "@/lib/integrations/ui/Spinner";
-import { disconnectAction, prepareWebhookAction, saveStripeAction, saveTwilioAction, testConnectionAction } from "./actions";
+import { disconnectAction, prepareWebhookAction, saveMetaAction, saveStripeAction, saveTwilioAction, testConnectionAction } from "./actions";
 
 const input = "w-full min-w-0 rounded border border-stone-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-700";
 const btn = "inline-flex items-center gap-2 rounded px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-700 disabled:opacity-60";
@@ -55,6 +55,36 @@ export function TwilioForm({ connected, initial }: { connected: boolean; initial
   );
 }
 
+export function MetaForm({ connected, initial }: { connected: boolean; initial: { phoneNumberId: string; wabaId: string } }) {
+  const [open, setOpen] = useState(!connected);
+  const { pending, run } = useRun();
+  const router = useRouter();
+  if (!open) return <button type="button" className={secondary} onClick={() => setOpen(true)}>Edit WhatsApp settings</button>;
+  return (
+    <form
+      className="space-y-3 rounded border border-stone-200 p-3"
+      onSubmit={async (e) => {
+        e.preventDefault();
+        const form = e.currentTarget;
+        const r = await run("save", () => saveMetaAction(Object.fromEntries(new FormData(form))));
+        if (r.ok) { form.reset(); setOpen(false); router.refresh(); }
+      }}
+    >
+      <p className="text-sm text-stone-700">From developers.facebook.com → your app → WhatsApp → API Setup. We check them with Meta before saving.</p>
+      <Field label="Phone number ID" name="phoneNumberId" defaultValue={initial.phoneNumberId} hint="Under “From” on the API Setup page (not the phone number itself)." />
+      <Field label="WhatsApp Business Account ID (optional)" name="wabaId" defaultValue={initial.wabaId} />
+      <Field label="Access token" name="accessToken" type="password" placeholder={connected ? "Leave blank to keep the saved token" : "EAA…"}
+        hint="The temporary token lasts 24 hours. For the demo, create a permanent System User token (see README)." autoComplete="new-password" />
+      <Field label="App secret" name="appSecret" type="password" placeholder={connected ? "Leave blank to keep the saved secret" : "32 characters"}
+        hint="App settings → Basic → App secret. Used to check that webhooks really come from Meta." autoComplete="new-password" />
+      <div className="flex flex-wrap gap-2">
+        <button type="submit" className={primary} disabled={!!pending}>{pending && <Spinner />}{pending ? "Checking with Meta…" : connected ? "Save changes" : "Connect WhatsApp"}</button>
+        {connected && <button type="button" className={secondary} onClick={() => setOpen(false)}>Cancel</button>}
+      </div>
+    </form>
+  );
+}
+
 export function StripeForm({ connected }: { connected: boolean }) {
   const [open, setOpen] = useState(!connected);
   const { pending, run } = useRun();
@@ -83,7 +113,7 @@ export function StripeForm({ connected }: { connected: boolean }) {
   );
 }
 
-export function PrepareWebhookButton({ provider }: { provider: "TWILIO" | "STRIPE" }) {
+export function PrepareWebhookButton({ provider }: { provider: "TWILIO" | "STRIPE" | "META" }) {
   const { pending, run } = useRun();
   const router = useRouter();
   return (
@@ -97,7 +127,7 @@ export function PrepareWebhookButton({ provider }: { provider: "TWILIO" | "STRIP
   );
 }
 
-export function TestButton({ provider }: { provider: "TWILIO" | "STRIPE" }) {
+export function TestButton({ provider }: { provider: "TWILIO" | "STRIPE" | "META" }) {
   const { pending, run } = useRun();
   const router = useRouter();
   return (
@@ -108,7 +138,7 @@ export function TestButton({ provider }: { provider: "TWILIO" | "STRIPE" }) {
   );
 }
 
-export function DisconnectButton({ provider, label }: { provider: "TWILIO" | "STRIPE"; label: string }) {
+export function DisconnectButton({ provider, label }: { provider: "TWILIO" | "STRIPE" | "META"; label: string }) {
   const { pending, run } = useRun();
   const router = useRouter();
   return (

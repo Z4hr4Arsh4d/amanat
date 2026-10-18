@@ -4,16 +4,24 @@ import Link from "next/link";
 import type { Integration, Provider } from "@prisma/client";
 import { requireUserPage, can, scoped } from "@/lib/shared/contracts";
 import { TelegramIntegrationCard } from "@/components/slots/TelegramIntegrationCard";
-import { appUrl, webhookUrl, type StripeConfig, type TwilioConfig } from "@/lib/integrations/store";
+import { appUrl, webhookUrl, type MetaConfig, type StripeConfig, type TwilioConfig } from "@/lib/integrations/store";
+import { metaVerifyToken } from "@/lib/integrations/meta";
 import { Chip, IntegrationStatusChip } from "@/lib/integrations/ui/StatusChip";
 import { TimeAgo } from "@/lib/integrations/ui/TimeAgo";
 import { AutoRefresh } from "@/lib/integrations/ui/AutoRefresh";
 import { CopyField } from "@/lib/integrations/ui/CopyField";
-import { DisconnectButton, PrepareWebhookButton, StripeForm, TestButton, TwilioForm } from "./forms";
+import { DisconnectButton, MetaForm, PrepareWebhookButton, StripeForm, TestButton, TwilioForm } from "./forms";
 
 export const dynamic = "force-dynamic";
 
 const LIMITS: Record<Provider, string[]> = {
+  META: [
+    "Free: Meta's test number, incoming messages and replies within 24 hours cost nothing.",
+    "The free test number only reaches up to 5 phone numbers that you add on the Meta API Setup page.",
+    "Free-form replies only within 24 hours of the customer's last message. After that WhatsApp needs an approved template.",
+    "The temporary access token expires after 24 hours; use a System User token for the demo.",
+    "Pictures and files sent by customers are noted but not shown in Amanat. Customers who send STOP are opted out.",
+  ],
   TWILIO: [
     "Sandbox only reaches phones that sent the join code to the sandbox number.",
     "Free-form replies only within 24 hours of the customer's last message. After that WhatsApp needs an approved template.",
@@ -126,6 +134,9 @@ export default async function IntegrationsPage() {
   const errorsFor = (p: Provider) => errorRows.filter((e) => e.provider === p).slice(0, 5);
   const calBy = new Map(calendars.map((c) => [c.id, c.calendarConnection]));
 
+  const meta = byProvider.get("META");
+  const metaCfg = (meta?.publicConfig ?? {}) as Partial<MetaConfig>;
+  const metaOn = !!meta && meta.status !== "NOT_CONNECTED";
   const twilio = byProvider.get("TWILIO");
   const twilioCfg = (twilio?.publicConfig ?? {}) as Partial<TwilioConfig>;
   const stripe = byProvider.get("STRIPE");
@@ -165,7 +176,37 @@ export default async function IntegrationsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card title="WhatsApp (Twilio)" subtitle="Receive customer messages as leads and reply from the Inbox." provider="TWILIO"
+        <Card title="WhatsApp (Meta Cloud API)" subtitle="Free. Receive customer messages as leads and reply from the Inbox." provider="META"
+          status={meta?.status ?? "NOT_CONNECTED"} lastSuccessAt={meta?.lastSuccessAt} lastError={meta?.lastError} errors={errorsFor("META")} canSeeHistory={canSeeHistory}>
+          {metaOn && (
+            <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
+              <div><dt className="inline text-stone-600">Number: </dt><dd className="inline font-mono">{metaCfg.displayPhone ?? "—"}</dd></div>
+              <div><dt className="inline text-stone-600">Name: </dt><dd className="inline">{metaCfg.verifiedName ?? "—"}</dd></div>
+              <div><dt className="inline text-stone-600">Phone number ID: </dt><dd className="inline font-mono">{metaCfg.phoneNumberId}</dd></div>
+              <div><dt className="inline text-stone-600">Access token: </dt><dd className="inline font-mono">{metaCfg.accessTokenMasked}</dd></div>
+              <div><dt className="inline text-stone-600">App secret: </dt><dd className="inline font-mono">{metaCfg.appSecretMasked}</dd></div>
+            </dl>
+          )}
+          {canManage && (meta ? (
+            <div className="space-y-2">
+              <CopyField label="Callback URL (Meta app → WhatsApp → Configuration → Webhook → Edit)" value={webhookUrl("whatsapp", meta.id)} />
+              <CopyField label="Verify token (made by Amanat for this workspace; paste it next to the Callback URL)" value={metaVerifyToken(meta.id)}
+                hint="Then press “Manage” under Webhook fields and subscribe to “messages”." />
+            </div>
+          ) : (
+            <PrepareWebhookButton provider="META" />
+          ))}
+          {canManage ? (
+            <MetaForm connected={metaOn} initial={{ phoneNumberId: metaCfg.phoneNumberId ?? "", wabaId: metaCfg.wabaId ?? "" }} />
+          ) : (
+            <p className="text-sm text-stone-600">Read only: you need the “Connect, change or remove integrations” permission to change this.</p>
+          )}
+          {canManage && metaOn && (
+            <div className="flex flex-wrap gap-2"><TestButton provider="META" /><DisconnectButton provider="META" label="WhatsApp (Meta)" /></div>
+          )}
+        </Card>
+
+        <Card title="WhatsApp (Twilio) — alternative" subtitle={metaOn ? "Not used while WhatsApp (Meta) is connected." : "Paid alternative to the Meta Cloud API."} provider="TWILIO"
           status={twilio?.status ?? "NOT_CONNECTED"} lastSuccessAt={twilio?.lastSuccessAt} lastError={twilio?.lastError} errors={errorsFor("TWILIO")} canSeeHistory={canSeeHistory}>
           {twilio?.status && twilio.status !== "NOT_CONNECTED" && (
             <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">

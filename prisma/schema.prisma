@@ -434,6 +434,7 @@ enum Provider {
   STRIPE
   GOOGLE
   TELEGRAM
+  META // P3: WhatsApp Cloud API (free alternative to Twilio)
 }
 
 enum IntegrationStatus {
