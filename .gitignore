@@ -42,4 +42,5 @@ next-env.d.ts
 
 .env
 
+# .env.example holds no secrets and must be committed
 !.env.example
