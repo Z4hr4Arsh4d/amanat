@@ -146,7 +146,7 @@ export default async function IntegrationsPage() {
   const googleReady = !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
   const connectedCount = calendars.filter((c) => c.calendarConnection?.status === "CONNECTED").length;
   const needsReconnect = calendars.filter((c) => c.calendarConnection?.status === "NEEDS_RECONNECT").length;
-  const googleStatus: Integration["status"] = !googleReady ? "NOT_CONNECTED" : needsReconnect > 0 && connectedCount === 0 ? "ERROR" : connectedCount > 0 ? "CONNECTED" : "NOT_CONNECTED";
+  const googleStatus: Integration["status"] = needsReconnect > 0 && connectedCount === 0 ? "ERROR" : connectedCount > 0 ? "CONNECTED" : "NOT_CONNECTED";
   const base = appUrl();
   const localUrl = /localhost|127\.0\.0\.1/.test(base);
 
@@ -267,10 +267,11 @@ export default async function IntegrationsPage() {
 
         <Card title="Google Calendar" subtitle="Each employee connects their own calendar to be bookable." provider="GOOGLE"
           status={googleStatus} lastSuccessAt={latest(calendars.map((c) => c.calendarConnection?.createdAt))}
-          lastError={!googleReady ? "GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET are not set on the server." : null} errors={errorsFor("GOOGLE")} canSeeHistory={canSeeHistory}>
-          {!googleReady && (
-            <p className="text-sm text-stone-700">The app owner must add the Google OAuth client to the server settings (see README, P3 section).</p>
-          )}
+          lastError={needsReconnect > 0 ? `${needsReconnect} employee calendar connection(s) expired and need reconnecting.` : null} errors={errorsFor("GOOGLE")} canSeeHistory={canSeeHistory}>
+          <p className="text-sm text-stone-700">
+            {googleReady ? "Google sign-in is set up. " : "Google sign-in is not set up yet (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET, see README). "}
+            {process.env.DEMO_MODE === "true" ? "Employees can also use a demo calendar (no Google) while DEMO_MODE=true." : ""}
+          </p>
           <p className="text-sm">
             <Link href="/settings/calendar" className="text-emerald-800 underline">Connect or check your own calendar</Link>
           </p>
@@ -286,7 +287,7 @@ export default async function IntegrationsPage() {
                       <tr key={u.id} className="border-t border-stone-100">
                         <td className="px-3 py-2"><span className="block">{u.name}</span>{c?.googleEmail && <span className="block break-all text-xs text-stone-600">{c.googleEmail}</span>}</td>
                         <td className="px-3 py-2">
-                          {c?.status === "CONNECTED" ? <Chip tone="ok">Connected</Chip> : c?.status === "NEEDS_RECONNECT" ? <Chip tone="bad">Needs reconnect</Chip> : <Chip tone="off">Not connected</Chip>}
+                          {c?.status === "CONNECTED" ? <Chip tone="ok">{c.googleEmail.endsWith("(demo calendar)") ? "Connected (demo)" : "Connected"}</Chip> : c?.status === "NEEDS_RECONNECT" ? <Chip tone="bad">Needs reconnect</Chip> : <Chip tone="off">Not connected</Chip>}
                         </td>
                       </tr>
                     );
