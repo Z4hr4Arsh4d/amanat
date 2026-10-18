@@ -1,4 +1,5 @@
-// P3 owns. WhatsApp messaging. Signatures of send() and notifyHandoff() are CONTRACTS.
+// P3 owns. Customer messaging over WhatsApp (Meta / Twilio) and the built-in web chat.
+// Signatures of send() and notifyHandoff() are CONTRACTS.
 // Callers are trusted server code; permission/visibility checks happen in the inbox actions.
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
@@ -8,6 +9,7 @@ import * as leads from "@/lib/leads";
 import * as timeline from "@/lib/crm/timeline";
 import { sendRegistered } from "./outbox";
 import { connected } from "./store";
+import { logEvent } from "./log";
 import "./twilio"; // registers the "twilio.message" executor
 import "./meta"; // registers the "meta.message" executor
 
@@ -27,21 +29,28 @@ export function optedOutText(c: { name: string; optedOutAt: Date | null }) {
   return `${c.name} opted out${c.optedOutAt ? ` on ${fmtDate(c.optedOutAt)}` : ""}. Messages are blocked to respect their choice.`;
 }
 
-/** Find or create the WhatsApp conversation for a contact (safe if two requests do it at once). */
-export async function ensureConversation(workspaceId: string, contactId: string) {
-  const where = { contactId_channel: { contactId, channel: "WHATSAPP" } };
+export type Channel = "WHATSAPP" | "WEBCHAT";
+
+/** Find or create a contact's conversation on a channel (safe if two requests do it at once). */
+export async function ensureConversation(workspaceId: string, contactId: string, channel: Channel = "WHATSAPP") {
+  const where = { contactId_channel: { contactId, channel } };
   const found = await prisma.conversation.findUnique({ where });
   if (found) return found;
   try {
-    return await prisma.conversation.create({ data: { workspaceId, contactId, channel: "WHATSAPP" } });
+    return await prisma.conversation.create({ data: { workspaceId, contactId, channel } });
   } catch (e) {
     if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return prisma.conversation.findUniqueOrThrow({ where });
     throw e;
   }
 }
 
-/** CONTRACT. Send a WhatsApp message (respects opt-out, goes through the outbox). Never throws. */
-export async function send(input: { workspaceId: string; contactId: string; body: string; userId: string | null }): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+/**
+ * CONTRACT. Send a message to a customer (respects opt-out). Never throws.
+ * The channel is the conversation's: web chat replies appear in the customer's chat window at once;
+ * WhatsApp replies go through the outbox (retries, delivery status). Without `conversationId` the
+ * contact's most recent conversation is used.
+ */
+export async function send(input: { workspaceId: string; contactId: string; body: string; userId: string | null; conversationId?: string }): Promise<{ ok: boolean; messageId?: string; error?: string }> {
   try {
     const body = input.body.trim();
     if (!body) return { ok: false, error: "Type a message first." };
@@ -50,11 +59,29 @@ export async function send(input: { workspaceId: string; contactId: string; body
     const contact = await prisma.contact.findFirst({ where: { id: input.contactId, workspaceId: input.workspaceId, deletedAt: null } });
     if (!contact) return { ok: false, error: "Contact not found." };
     if (contact.optedOut) return { ok: false, error: optedOutText(contact) };
+
+    let convo = input.conversationId
+      ? await prisma.conversation.findFirst({ where: { id: input.conversationId, workspaceId: input.workspaceId, contactId: contact.id } })
+      : await prisma.conversation.findFirst({ where: { workspaceId: input.workspaceId, contactId: contact.id }, orderBy: { lastMessageAt: "desc" } });
+    if (input.conversationId && !convo) return { ok: false, error: "Conversation not found." };
+
+    // ── Built-in web chat: the reply is stored and the customer's chat window shows it (no provider involved) ──
+    if (convo?.channel === "WEBCHAT") {
+      const msg = await prisma.message.create({
+        data: { workspaceId: input.workspaceId, conversationId: convo.id, direction: "OUT", body, status: "DELIVERED", sentById: input.userId },
+      });
+      await prisma.conversation.update({ where: { id: convo.id }, data: { lastMessageAt: msg.createdAt } });
+      await logEvent({ workspaceId: input.workspaceId, provider: "WEBCHAT", direction: "OUT", type: "webchat.message", status: "SENT", attempts: 1, payload: { messageId: msg.id, to: contact.name, preview: body.slice(0, 80), by: input.userId ?? "automatic" } });
+      await timeline.add({ workspaceId: input.workspaceId, actorId: input.userId, type: "message", contactId: contact.id, opportunityId: convo.opportunityId, summary: `Web chat message sent: "${body.slice(0, 80)}"`, data: { messageId: msg.id, direction: "OUT" } });
+      if (input.userId) await leads.markActed({ workspaceId: input.workspaceId, contactId: contact.id, userId: input.userId, action: "message" });
+      return { ok: true, messageId: msg.id };
+    }
+
+    // ── WhatsApp ──
     if (!contact.phone) return { ok: false, error: `${contact.name} has no phone number. Add one on the contact page.` };
     const channel = await activeChannel(input.workspaceId);
-    if (!channel) return { ok: false, error: NOT_CONNECTED };
-
-    const convo = await ensureConversation(input.workspaceId, contact.id);
+    if (!channel) return { ok: false, error: convo ? NOT_CONNECTED : `${NOT_CONNECTED} ${contact.name} has not used the website chat either, so there is no way to reach them yet.` };
+    convo = convo ?? (await ensureConversation(input.workspaceId, contact.id, "WHATSAPP"));
     const msg = await prisma.message.create({
       data: { workspaceId: input.workspaceId, conversationId: convo.id, direction: "OUT", body, status: "QUEUED", sentById: input.userId },
     });
@@ -92,6 +119,7 @@ export async function retry(input: { workspaceId: string; messageId: string; use
   const msg = await prisma.message.findFirst({ where: { id: input.messageId, workspaceId: input.workspaceId, direction: "OUT" }, include: { conversation: { include: { contact: true } } } });
   if (!msg) return { ok: false, error: "Message not found." };
   if (msg.status !== "FAILED") return { ok: false, error: "Only failed messages can be retried." };
+  if (msg.conversation.channel !== "WHATSAPP") return { ok: false, error: "Web chat messages are delivered instantly and do not need a retry." };
   const c = msg.conversation.contact;
   if (c.optedOut) return { ok: false, error: optedOutText(c) };
   const channel = await activeChannel(input.workspaceId);
@@ -118,10 +146,14 @@ export async function inSessionWindow(conversationId: string) {
 }
 
 /** Automatic message to the customer (no employee). Skipped quietly when it cannot be delivered. */
-export async function sendAutomatic(workspaceId: string, contactId: string, body: string) {
-  const convo = await prisma.conversation.findUnique({ where: { contactId_channel: { contactId, channel: "WHATSAPP" } } });
-  if (!convo || !(await inSessionWindow(convo.id))) return { ok: false, error: "Customer has no open WhatsApp session." };
-  return send({ workspaceId, contactId, body, userId: null });
+export async function sendAutomatic(workspaceId: string, contactId: string, body: string, conversationId?: string) {
+  const convo = conversationId
+    ? await prisma.conversation.findFirst({ where: { id: conversationId, workspaceId, contactId } })
+    : await prisma.conversation.findFirst({ where: { workspaceId, contactId }, orderBy: { lastMessageAt: "desc" } });
+  if (!convo) return { ok: false, error: "The customer has not written to us yet." };
+  // WhatsApp only allows free-form messages within 24h of the customer's last message; web chat has no such limit.
+  if (convo.channel === "WHATSAPP" && !(await inSessionWindow(convo.id))) return { ok: false, error: "Customer has no open WhatsApp session." };
+  return send({ workspaceId, contactId, body, userId: null, conversationId: convo.id });
 }
 
 /**

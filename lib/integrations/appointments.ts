@@ -4,7 +4,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { audit, can, leads, requirePermission, scoped, timeline, type Ctx } from "@/lib/shared/contracts";
 import { HttpError, NotFound } from "@/lib/core/errors";
-import { deleteEvent, demoMode, demoRefreshToken, freeBusy, googleConfigured, insertEvent, isDemoConnection, patchEvent, ReconnectNeeded, revoke } from "./google";
+import { addTestEvent, deleteEvent, demoMode, demoRefreshToken, diagnose, eventLink, freeBusy, googleConfigured, insertEvent, isDemoConnection, patchEvent, ReconnectNeeded, revoke } from "./google";
 import { forgetBusy } from "./calendar";
 import { appUrl } from "./store";
 import { formatInZone, formatTimeInZone, isValidZone, offsetLabel, zonedToUtc } from "./time";
@@ -244,14 +244,25 @@ export async function cancel(ctx: Ctx, appointmentId: string) {
   return { message: msg + ". It was removed from the calendar." };
 }
 
-export const ListQuery = z.object({ contactId: z.string().max(40).optional().catch(undefined), opportunityId: z.string().max(40).optional().catch(undefined) });
+export const ListQuery = z.object({
+  contactId: z.string().max(40).optional().catch(undefined),
+  opportunityId: z.string().max(40).optional().catch(undefined),
+  mine: z.enum(["1"]).optional().catch(undefined), // My calendar page: only appointments with me, upcoming first
+});
 
 /** Appointments for the contact / opportunity pages. Shown in the viewer's zone and the employee's zone (I3.5). */
 export async function listAppointments(ctx: Ctx, raw: Record<string, string | undefined>) {
-  requirePermission(ctx, "crm.view");
   const f = ListQuery.parse(raw);
-  const where: Prisma.AppointmentWhereInput = { ...(f.contactId ? { contactId: f.contactId } : {}), ...(f.opportunityId ? { opportunityId: f.opportunityId } : {}) };
-  const rows = await scoped(ctx).appointment.findMany({ where, orderBy: { startUtc: "desc" }, take: 50, include: { contact: { select: { name: true } } } });
+  if (!f.mine) requirePermission(ctx, "crm.view"); // your own appointments need no CRM permission
+  const where: Prisma.AppointmentWhereInput = {
+    ...(f.contactId ? { contactId: f.contactId } : {}),
+    ...(f.opportunityId ? { opportunityId: f.opportunityId } : {}),
+    ...(f.mine ? { userId: ctx.userId, status: { not: "CANCELLED" }, endUtc: { gt: new Date() } } : {}),
+  };
+  const rows = await scoped(ctx).appointment.findMany({ where, orderBy: { startUtc: f.mine ? "asc" : "desc" }, take: 50, include: { contact: { select: { name: true } } } });
+  // The employee's Google account email builds the "Open in Google Calendar" link (CalendarConnection has no workspace column; rows come from this workspace's appointments).
+  const conns = await prisma.calendarConnection.findMany({ where: { userId: { in: Array.from(new Set(rows.map((r) => r.userId))) } }, select: { userId: true, googleEmail: true } });
+  const emailOf = new Map(conns.map((c) => [c.userId, c.googleEmail]));
   const users = await scoped(ctx).user.findMany({ where: { id: { in: Array.from(new Set(rows.flatMap((r) => [r.userId, r.createdById]))) } }, select: { id: true, name: true } });
   const names = new Map(users.map((u) => [u.id, u.name]));
   const viewerTz = isValidZone(ctx.timezone) ? ctx.timezone : "UTC";
@@ -267,6 +278,25 @@ export async function listAppointments(ctx: Ctx, raw: Record<string, string | un
       employeeLabel: a.timezone !== viewerTz ? `${formatInZone(a.startUtc, a.timezone)}–${formatTimeInZone(a.endUtc, a.timezone)} (${a.timezone}, employee's time)` : null,
       upcoming: a.endUtc.getTime() > Date.now() && a.status !== "CANCELLED",
       demo: a.googleEventId.startsWith("demo_"),
+      googleLink: eventLink(a.googleEventId, emailOf.get(a.userId) ?? ""),
     })),
   };
+}
+
+// ───────────────────────────── "Check my calendar" (My calendar page) ─────────────────────────────
+
+export async function checkMyCalendar(ctx: Ctx) {
+  return diagnose(ctx.userId);
+}
+
+export async function addMyTestEvent(ctx: Ctx) {
+  const c = await prisma.calendarConnection.findUnique({ where: { userId: ctx.userId } });
+  if (!c) throw new HttpError(409, "Connect your calendar first.");
+  if (c.status !== "CONNECTED") throw new HttpError(409, "Your calendar connection expired. Press “Reconnect Google Calendar” first.");
+  try {
+    const r = await addTestEvent(ctx.userId);
+    return { ...r, message: r.demo ? "This is a demo calendar, so there is no Google Calendar to show it in. Book an appointment from an opportunity page to test it." : "Test event added. Open it in Google Calendar with the link below." };
+  } catch (e) {
+    throw new HttpError(e instanceof ReconnectNeeded ? 409 : 502, `The test event was not added. ${(e as Error).message}`);
+  }
 }

@@ -11,11 +11,18 @@ import { Chip, IntegrationStatusChip } from "@/lib/integrations/ui/StatusChip";
 import { TimeAgo } from "@/lib/integrations/ui/TimeAgo";
 import { AutoRefresh } from "@/lib/integrations/ui/AutoRefresh";
 import { CopyField } from "@/lib/integrations/ui/CopyField";
-import { DisconnectButton, MetaForm, PrepareWebhookButton, StripeForm, TestButton, TwilioForm } from "./forms";
+import { DisconnectButton, MetaForm, PrepareWebhookButton, StripeForm, TestButton, TwilioForm, WebchatToggle } from "./forms";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
 const LIMITS: Record<Provider, string[]> = {
+  WEBCHAT: [
+    "Built in: no outside account, cost or setup. Share the link on your website, in an email or a QR code.",
+    "Customers give a name and phone number, then chat live. Each chat becomes a lead with an owner and the same auto-reply, escalation and handoff messages as WhatsApp.",
+    "Staff reply from the Inbox. Replies appear in the customer's chat window within seconds.",
+    "Customers see only their own chat. If they close the page and come back on the same device, the chat continues.",
+  ],
   META: [
     "Free: Meta's test number, incoming messages and replies within 24 hours cost nothing.",
     "The free test number only reaches up to 5 phone numbers that you add on the Meta API Setup page.",
@@ -54,6 +61,7 @@ function Card(props: {
   errors: { id: string; createdAt: Date; type: string; error: string | null }[];
   provider: Provider;
   canSeeHistory: boolean;
+  chip?: React.ReactNode;
   children?: React.ReactNode;
 }) {
   return (
@@ -63,7 +71,7 @@ function Card(props: {
           <h2 id={`h-${props.provider}`} className="text-lg font-semibold">{props.title}</h2>
           <p className="text-sm text-stone-600">{props.subtitle}</p>
         </div>
-        <IntegrationStatusChip status={props.status} />
+        {props.chip ?? <IntegrationStatusChip status={props.status} />}
       </header>
 
       <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
@@ -149,6 +157,10 @@ export default async function IntegrationsPage() {
   const needsReconnect = calendars.filter((c) => c.calendarConnection?.status === "NEEDS_RECONNECT").length;
   const googleStatus: Integration["status"] = needsReconnect > 0 && connectedCount === 0 ? "ERROR" : connectedCount > 0 ? "CONNECTED" : "NOT_CONNECTED";
   const base = appUrl();
+  const ws = await prisma.workspace.findUnique({ where: { id: ctx.workspaceId }, select: { slug: true } });
+  const chatUrl = `${base}/api/webhooks/webchat/${ws?.slug ?? ""}`;
+  const webchat = byProvider.get("WEBCHAT");
+  const chatOn = !webchat || webchat.status !== "NOT_CONNECTED";
   const localUrl = /localhost|127\.0\.0\.1/.test(base);
 
   return (
@@ -176,6 +188,18 @@ export default async function IntegrationsPage() {
         </div>
       </header>
 
+      <details className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950" open>
+        <summary className="cursor-pointer font-semibold">Try everything in 5 minutes</summary>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li><strong>Customer chat:</strong> open the <a className="underline" href={chatUrl} target="_blank" rel="noreferrer">customer chat</a> in a new tab, type a name, phone and message. A lead is created and the customer gets an automatic reply.</li>
+          <li><strong>Reply:</strong> open the <Link className="underline" href="/inbox">Inbox</Link>, pick the chat and answer. The reply shows up in the customer&apos;s tab within seconds.</li>
+          <li><strong>Escalation:</strong> start a chat and do not answer. After the wait time set in Assignment rules the lead moves to the next person and the customer is told who took over (the worker must be running).</li>
+          <li><strong>Payment:</strong> open an opportunity, press <em>Create payment link</em> (needs Stripe below), pay with card 4242 4242 4242 4242 and watch it turn Paid on <Link className="underline" href="/payments">Payments</Link>.</li>
+          <li><strong>Appointment:</strong> on <Link className="underline" href="/settings/calendar">My calendar</Link> connect Google (or the demo calendar) and press <em>Check now</em>, then book from an opportunity page.</li>
+          <li><strong>Proof:</strong> <Link className="underline" href="/integrations/history">Sync history</Link> lists every message, payment event and calendar call{faultLabAllowed(ctx) ? <>, and the <Link className="underline" href="/integrations/fault-lab">Fault lab</Link> shows duplicates, forged requests and outages being handled</> : ""}.</li>
+        </ol>
+      </details>
+
       {localUrl && canManage && (
         <p role="note" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <span aria-hidden="true">⚠ </span>APP_URL is <code>{base}</code>. Twilio and Stripe cannot reach a localhost address.
@@ -184,7 +208,20 @@ export default async function IntegrationsPage() {
       )}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <Card title="WhatsApp (Meta Cloud API)" subtitle="Free. Receive customer messages as leads and reply from the Inbox." provider="META"
+        <Card title="Website chat (built in)" subtitle="Works right now, no account needed. Customers chat with your team from a link." provider="WEBCHAT"
+          status={chatOn ? "CONNECTED" : "NOT_CONNECTED"} lastSuccessAt={webchat?.lastSuccessAt} lastError={null} errors={errorsFor("WEBCHAT")} canSeeHistory={canSeeHistory}
+          chip={chatOn ? <Chip tone="ok">On</Chip> : <Chip tone="off">Turned off</Chip>}>
+          <div className="space-y-2">
+            <CopyField label="Customer chat link (share this)" value={chatUrl} hint={chatOn ? "Open it in another browser tab or on your phone to play the customer." : "The chat is turned off, so this link shows “Chat is not available”."} />
+            <div className="flex flex-wrap gap-2">
+              {chatOn && <a href={chatUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded bg-emerald-800 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700">Open the customer chat</a>}
+              <Link href="/inbox" className="inline-flex items-center rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">Open the Inbox</Link>
+              {canManage && <WebchatToggle on={chatOn} />}
+            </div>
+          </div>
+        </Card>
+
+        <Card title="WhatsApp (Meta Cloud API)" subtitle="Optional. Free from Meta, needs a Facebook developer account. Receive WhatsApp messages as leads." provider="META"
           status={meta?.status ?? "NOT_CONNECTED"} lastSuccessAt={meta?.lastSuccessAt} lastError={meta?.lastError} errors={errorsFor("META")} canSeeHistory={canSeeHistory}>
           {metaOn && (
             <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
@@ -214,7 +251,7 @@ export default async function IntegrationsPage() {
           )}
         </Card>
 
-        <Card title="WhatsApp (Twilio) — alternative" subtitle={metaOn ? "Not used while WhatsApp (Meta) is connected." : "Paid alternative to the Meta Cloud API."} provider="TWILIO"
+        <Card title="WhatsApp (Twilio) — alternative" subtitle={metaOn ? "Optional. Not used while WhatsApp (Meta) is connected." : "Optional. Twilio account needed; the website chat works without it."} provider="TWILIO"
           status={twilio?.status ?? "NOT_CONNECTED"} lastSuccessAt={twilio?.lastSuccessAt} lastError={twilio?.lastError} errors={errorsFor("TWILIO")} canSeeHistory={canSeeHistory}>
           {twilio?.status && twilio.status !== "NOT_CONNECTED" && (
             <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">

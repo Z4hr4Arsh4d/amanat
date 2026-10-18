@@ -435,6 +435,7 @@ enum Provider {
   GOOGLE
   TELEGRAM
   META // P3: WhatsApp Cloud API (free alternative to Twilio)
+  WEBCHAT // P3: built-in customer chat page (no outside account needed)
 }
 
 enum IntegrationStatus {

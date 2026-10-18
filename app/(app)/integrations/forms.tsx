@@ -5,7 +5,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRun } from "@/lib/integrations/ui/useRun";
 import { Spinner } from "@/lib/integrations/ui/Spinner";
-import { disconnectAction, prepareWebhookAction, saveMetaAction, saveStripeAction, saveTwilioAction, testConnectionAction } from "./actions";
+import { disconnectAction, prepareWebhookAction, saveMetaAction, saveStripeAction, saveTwilioAction, setWebchatAction, testConnectionAction } from "./actions";
 
 const input = "w-full min-w-0 rounded border border-stone-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-700";
 const btn = "inline-flex items-center gap-2 rounded px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-700 disabled:opacity-60";
@@ -148,6 +148,20 @@ export function DisconnectButton({ provider, label }: { provider: "TWILIO" | "ST
         run("disc", () => disconnectAction(provider), { onOk: () => router.refresh() });
       }}>
       {pending && <Spinner />}Disconnect
+    </button>
+  );
+}
+
+export function WebchatToggle({ on }: { on: boolean }) {
+  const { pending, run } = useRun();
+  const router = useRouter();
+  return (
+    <button type="button" disabled={!!pending} className={on ? danger : secondary}
+      onClick={() => {
+        if (on && !confirm("Turn off the website chat? Customers who open the link will see “Chat is not available”. Existing chats stay in the Inbox.")) return;
+        run("toggle", () => setWebchatAction(!on), { onOk: () => router.refresh() });
+      }}>
+      {pending && <Spinner />}{on ? "Turn off" : "Turn on"}
     </button>
   );
 }

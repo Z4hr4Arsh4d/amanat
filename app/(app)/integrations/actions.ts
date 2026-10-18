@@ -82,3 +82,12 @@ export async function retryEventAction(eventId: unknown): Promise<ActionResult> 
     return r.ok ? { ok: true, message: "Sent again." } : { ok: false, error: r.error ?? "Retry failed." };
   });
 }
+
+export async function setWebchatAction(enabled: unknown): Promise<ActionResult> {
+  return safe(async () => {
+    const ctx = await requireUser();
+    const r = await manage.setWebchat(ctx, z.boolean().parse(enabled));
+    revalidatePath("/integrations");
+    return r;
+  });
+}

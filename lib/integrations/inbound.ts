@@ -7,9 +7,9 @@ import { claimInbound, finishEvent, logEvent } from "./log";
 import { explainError } from "./errors";
 import { markSuccess } from "./store";
 import { STATUS_MAP } from "./status";
-import { ensureConversation, sendAutomatic } from "./messaging";
+import { ensureConversation, sendAutomatic, type Channel } from "./messaging";
 
-type WaProvider = "TWILIO" | "META";
+type WaProvider = "TWILIO" | "META" | "WEBCHAT";
 
 const STOP_WORDS = new Set(["STOP", "STOPALL", "UNSUBSCRIBE", "CANCEL", "END", "QUIT"]);
 const START_WORDS = new Set(["START", "UNSTOP", "YES"]);
@@ -25,19 +25,19 @@ export async function rejectWebhook(i: Integration, provider: WaProvider, eventT
   });
 }
 
-async function findOrCreateContact(workspaceId: string, phone: string, profileName?: string) {
+async function findOrCreateContact(workspaceId: string, phone: string, profileName?: string, via = "WhatsApp message") {
   const existing = await prisma.contact.findFirst({ where: { workspaceId, phone } });
   if (existing) {
     if (existing.deletedAt) {
       // A deleted contact messaged again: bring the record back instead of losing the message.
       await prisma.contact.updateMany({ where: { id: existing.id }, data: { deletedAt: null, version: { increment: 1 } } });
-      await timeline.add({ workspaceId, actorId: null, type: "note", contactId: existing.id, summary: "Contact restored because they sent a new WhatsApp message" });
+      await timeline.add({ workspaceId, actorId: null, type: "note", contactId: existing.id, summary: `Contact restored because they sent a new ${via}` });
     }
     return { contact: existing, created: false };
   }
   try {
     const contact = await prisma.contact.create({ data: { workspaceId, phone, name: profileName?.trim().slice(0, 80) || phone } });
-    await timeline.add({ workspaceId, actorId: null, type: "note", contactId: contact.id, summary: "Contact created from an incoming WhatsApp message" });
+    await timeline.add({ workspaceId, actorId: null, type: "note", contactId: contact.id, summary: `Contact created from an incoming ${via}` });
     return { contact, created: true };
   } catch (e) {
     // Two messages from a new number at the same moment: the second one uses the first one's contact.
@@ -58,7 +58,8 @@ export type IncomingMessage = {
 };
 
 /** Returns "processed" | "duplicate" | "failed" so the route can answer the provider correctly. */
-export async function receiveMessage(i: Integration, provider: WaProvider, m: IncomingMessage): Promise<"processed" | "duplicate" | "failed"> {
+export async function receiveMessage(i: Pick<Integration, "workspaceId">, provider: WaProvider, m: IncomingMessage, channel: Channel = "WHATSAPP"): Promise<"processed" | "duplicate" | "failed"> {
+  const via = channel === "WEBCHAT" ? "web chat message" : "WhatsApp message";
   const workspaceId = i.workspaceId;
   const ev = await claimInbound({ workspaceId, provider, type: "message.inbound", externalId: m.externalId, payload: m.raw });
   if (!ev) {
@@ -73,8 +74,8 @@ export async function receiveMessage(i: Integration, provider: WaProvider, m: In
     const isStop = STOP_WORDS.has(word);
     const isStart = START_WORDS.has(word);
 
-    const { contact, created } = await findOrCreateContact(workspaceId, m.from, m.profileName);
-    const convo = await ensureConversation(workspaceId, contact.id);
+    const { contact, created } = await findOrCreateContact(workspaceId, m.from, m.profileName, via);
+    const convo = await ensureConversation(workspaceId, contact.id, channel);
 
     // Lock this conversation row so two messages arriving together cannot both create a lead (Q5).
     const result = await prisma.$transaction(
@@ -87,7 +88,7 @@ export async function receiveMessage(i: Integration, provider: WaProvider, m: In
           const open = await tx.lead.findFirst({ where: { workspaceId, contactId: contact.id, status: OPEN_LEAD }, orderBy: { createdAt: "desc" } });
           if (open) leadId = open.id;
           else {
-            const lead = await leads.intake({ workspaceId, contactId: contact.id, source: "WHATSAPP", actorId: null });
+            const lead = await leads.intake({ workspaceId, contactId: contact.id, source: channel === "WEBCHAT" ? "WEB_FORM" : "WHATSAPP", actorId: null });
             leadId = lead.id;
             newLead = true;
           }
@@ -105,7 +106,7 @@ export async function receiveMessage(i: Integration, provider: WaProvider, m: In
 
     await timeline.add({
       workspaceId, actorId: null, type: "message", contactId: contact.id, opportunityId: convo.opportunityId, leadId: result.leadId,
-      summary: `WhatsApp message received: "${text.slice(0, 80)}"`, data: { messageId: result.msg.id, direction: "IN" },
+      summary: `${channel === "WEBCHAT" ? "Web chat" : "WhatsApp"} message received: "${text.slice(0, 80)}"`, data: { messageId: result.msg.id, direction: "IN" },
     });
 
     // I1.9: opt-out / opt back in.
@@ -125,7 +126,7 @@ export async function receiveMessage(i: Integration, provider: WaProvider, m: In
         await prisma.contact.updateMany({ where: { id: contact.id, ownerId: null }, data: { ownerId: lead.ownerId } });
       }
       autoReply = await autoReplyText(workspaceId, lead?.ownerId ?? null);
-      if (autoReply) await sendAutomatic(workspaceId, contact.id, autoReply);
+      if (autoReply) await sendAutomatic(workspaceId, contact.id, autoReply, convo.id);
     }
 
     await finishEvent(ev.id, "PROCESSED", null, {

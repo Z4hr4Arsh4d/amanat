@@ -47,3 +47,21 @@ export async function cancelAppointmentAction(appointmentId: unknown): Promise<A
     return { ok: true, message: r.message };
   });
 }
+
+type Check = Awaited<ReturnType<typeof appts.checkMyCalendar>>;
+export async function checkCalendarAction(): Promise<ActionResult<Check>> {
+  return safe<Check>(async () => {
+    const ctx = await requireUser();
+    const r = await appts.checkMyCalendar(ctx);
+    return { ok: true, message: r.steps.every((s) => s.ok) ? "Your calendar works." : "Some checks failed. See the details below.", data: r };
+  });
+}
+
+type TestEvent = { start: string; end: string; link: string | null; demo: boolean };
+export async function addTestEventAction(): Promise<ActionResult<TestEvent>> {
+  return safe<TestEvent>(async () => {
+    const ctx = await requireUser();
+    const r = await appts.addMyTestEvent(ctx);
+    return { ok: true, message: r.message, data: { start: r.start.toISOString(), end: r.end.toISOString(), link: r.link, demo: r.demo } };
+  });
+}

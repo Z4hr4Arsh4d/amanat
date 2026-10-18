@@ -136,7 +136,7 @@ export function BookAppointmentForm({ contactId, opportunityId }: { contactId: s
 
 type Appt = {
   id: string; title: string; status: "BOOKED" | "RESCHEDULED" | "CANCELLED"; contact: string; employee: string; bookedBy: string;
-  timezone: string; startUtc: string; endUtc: string; minutes: number; viewerLabel: string; employeeLabel: string | null; upcoming: boolean; demo: boolean;
+  timezone: string; startUtc: string; endUtc: string; minutes: number; viewerLabel: string; employeeLabel: string | null; upcoming: boolean; demo: boolean; googleLink: string | null;
 };
 type ApptList = { items: Appt[]; canChange: boolean; canOverride: boolean; viewerTimezone: string };
 
@@ -188,7 +188,8 @@ export function AppointmentList({ query, emptyText }: { query: Record<string, st
             <div className="min-w-0">
               <p className={`font-medium ${a.status === "CANCELLED" ? "line-through" : ""}`}>{a.viewerLabel}</p>
               {a.employeeLabel && <p className="text-xs text-stone-700">{a.employeeLabel}</p>}
-              <p className="text-stone-700">With {a.employee} · booked by {a.bookedBy}{a.demo ? " · demo calendar" : ""}</p>
+              <p className="text-stone-700">{a.contact} · with {a.employee} · booked by {a.bookedBy}{a.demo ? " · demo calendar" : ""}</p>
+              {a.googleLink && a.status !== "CANCELLED" && <a href={a.googleLink} target="_blank" rel="noreferrer" className="text-xs text-emerald-800 underline">Open in Google Calendar</a>}
             </div>
             {a.status === "CANCELLED" ? <Chip tone="off">Cancelled</Chip> : !a.upcoming ? <Chip tone="info">Past</Chip> : a.status === "RESCHEDULED" ? <Chip tone="warn">Rescheduled</Chip> : <Chip tone="ok">Booked</Chip>}
           </div>
