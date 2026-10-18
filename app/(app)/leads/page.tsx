@@ -1,5 +1,7 @@
-import { Placeholder } from "@/components/Placeholder";
+import { requireUserPage, can } from "@/lib/core/session";
+import { LeadsClient } from "./LeadsClient";
 
-export default function Page() {
-  return <Placeholder title="Leads" owner="P2" reqs="F3.1–F3.6, F3.8" />;
+export default async function Page() {
+  const ctx = await requireUserPage();
+  return <LeadsClient canCreate={can(ctx, "crm.create")} />;
 }
