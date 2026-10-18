@@ -62,6 +62,18 @@ What happens: a message from an unknown number creates a contact + a WhatsApp le
 
 Limits: the sandbox only reaches phones that joined it; free-form replies only within 24h of the customer's last message (error 63016 otherwise, shown in plain words).
 
+**Testing without a Twilio account** (dev only; signs requests exactly like Twilio):
+```bash
+npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts setup              # fake Twilio connection for sunrise-solar
+npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts message +923001234567 "Hi, need a quote" "Ahmed Raza"
+npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts duplicate          # same MessageSid again → ignored
+npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts forged             # bad signature → 403, logged, audited
+npx tsx --env-file=.env lib/integrations/dev/simulate-twilio.ts status <messageId> failed 63016
+```
+Replies sent from the Inbox fail with the fake credentials; that shows the retry + failed-message handling. Connect real credentials on /integrations to replace it.
+
+**ENCRYPTION_KEY must be the same for the whole team** when you share one database, otherwise secrets saved by one person cannot be read by another (the integration then shows as not connected).
+
 **Outbox and retries.** Every outgoing call is an `IntegrationEvent`. Temporary failures (network, timeout, 429, 5xx) retry after 5s, 15s, 45s (4 tries) from the worker (`npm run worker`); permanent ones fail at once with a plain explanation and a Retry button. Safe with two workers running. Sync history: **/integrations/history**.
 
 For P2 (Telegram): call `outbox.send({ workspaceId, provider: "TELEGRAM", type, payload, run })`. For worker retries, also `registerExecutor(type, { run, onResult })` in a module imported by `lib/integrations/executors.ts`; executors must load secrets from the Integration row, never from `payload` (payloads are redacted).
