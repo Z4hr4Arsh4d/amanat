@@ -1,4 +1,4 @@
-// P2 owns. Run with:  npx tsx worker/test-escalation.ts
+// P2 owns. Run with:  npx tsx --conditions=react-server --env-file=.env worker/test-escalation.ts
 // Proves F3.8: two escalations of the same overdue lead at the same moment move it exactly once.
 // Uses its own throwaway workspace so it never touches real data.
 import { prisma } from "@/lib/db";

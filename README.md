@@ -115,7 +115,7 @@ webhooks — no session needed). Server actions return `{ ok, data | error }` vi
 **5. Show the proofs**
 - *Restart safety:* assign a lead, press Ctrl+C on the worker, wait past the countdown, start it again: the lead escalates exactly once.
 - *Two workers at once:* start `npm run worker` in two terminals. Each overdue lead still escalates once (conditional update on `version`).
-- *Automated check:* `npx tsx --env-file=.env worker/test-escalation.ts` creates its own throwaway workspace, escalates one overdue lead from two workers at the same instant and asserts exactly one escalation.
+- *Automated check:* `npx tsx --conditions=react-server --env-file=.env worker/test-escalation.ts` creates its own throwaway workspace, escalates one overdue lead from two workers at the same instant and asserts exactly one escalation.
 
 **Rules worth knowing.** Routing reason: every assignment records who was skipped and why. Absence: unacknowledged leads move at once; acknowledged leads stay but are flagged "Owner away" and appear in the recovery queue. Filters: the contacts and opportunities pages read `?f=` with `filters.parseFilterParam` + `filters.buildWhere` (see `lib/shared/contracts.ts`).
 

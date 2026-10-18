@@ -3,7 +3,6 @@
 import * as audit from "@/lib/audit";
 import * as timeline from "@/lib/crm/timeline";
 import * as notify from "@/lib/notify";
-import * as messaging from "@/lib/integrations/messaging";
 
 export type Handover = {
   workspaceId: string; leadId: string; contactId: string;
@@ -32,6 +31,9 @@ export async function afterHandover(h: Handover): Promise<void> {
     console.error("[handover] alert failed", e);
   }
   try {
+    // Loaded on demand: messaging.ts imports contracts.ts -> server-only session code, which must not be
+    // loaded when the worker starts (it would crash the worker before any job runs).
+    const messaging = await import("@/lib/integrations/messaging");
     await messaging.notifyHandoff({ workspaceId: h.workspaceId, contactId: h.contactId, newOwnerName: h.toName });
   } catch (e) {
     console.error("[handover] customer message failed", e);
