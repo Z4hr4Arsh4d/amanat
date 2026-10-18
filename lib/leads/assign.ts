@@ -5,6 +5,7 @@ import type { AssignmentConfig, Lead, Prisma, UserStatus } from "@prisma/client"
 import { prisma } from "@/lib/db";
 import * as audit from "@/lib/audit";
 import * as timeline from "@/lib/crm/timeline";
+import * as notify from "@/lib/notify";
 import { isBusyNow } from "@/lib/integrations/calendar";
 
 export const STATUS_LABEL: Record<UserStatus, string> = {
@@ -150,18 +151,18 @@ export async function autoAssign(workspaceId: string, leadId: string, quiet = fa
       data: { workspaceId, leadId, fromUserId: null, toUserId: owner.id, kind: "AUTO", level, reason },
     });
     if (rotation.user) await tx.assignmentConfig.update({ where: { workspaceId }, data: { rrCursor: owner.id } });
-    await tx.notification.create({
-      data: {
-        workspaceId, userId: owner.id, leadId, channel: "INAPP", status: "SENT",
-        title: "New lead assigned to you",
-        body: `${lead.contact.name} (${SOURCE_LABEL[lead.source]}). Acknowledge within ${seconds}s.`,
-      },
-    });
     return { lead, choice: { user: owner, reason } as Choice, owner };
   }, TX_OPTIONS);
 
   if (done) {
     const { lead, choice, owner } = done;
+    if (owner) {
+      try {
+        await notify.alert({ workspaceId, userId: owner.id, leadId, title: "New lead assigned to you", reason: choice.reason });
+      } catch (e) {
+        console.error("[assign] alert failed", e); // an alert problem must never undo an assignment
+      }
+    }
     await audit.record({
       workspaceId, actorId: null, actorLabel: "System (assignment)", action: "lead.assigned",
       targetType: "Lead", targetId: leadId, after: { ownerId: owner?.id ?? null, status: owner ? "ASSIGNED" : "UNASSIGNED", reason: choice.reason },
