@@ -2,7 +2,10 @@
 // Callers are trusted server code; permission/visibility checks happen in the inbox actions.
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db";
-import { leads, timeline } from "@/lib/shared/contracts";
+// Imported directly, not through lib/shared/contracts.ts: that file also pulls in web-page session code,
+// which crashes when this module runs inside the worker (notifyHandoff is called from the escalation worker).
+import * as leads from "@/lib/leads";
+import * as timeline from "@/lib/crm/timeline";
 import { sendRegistered } from "./outbox";
 import { connected } from "./store";
 import "./twilio"; // registers the "twilio.message" executor
