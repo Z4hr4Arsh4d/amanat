@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db";
 import { PermanentError, registerExecutor } from "./outbox";
 import { connected, webhookUrl, type TwilioConfig, type TwilioSecrets } from "./store";
 import { whatsappAddress } from "./phone";
+import { STATUS_MAP } from "./status";
 
 export function twilioClient(s: TwilioSecrets) {
   return twilio(s.accountSid, s.authToken, { timeout: 10_000, autoRetry: false });
@@ -25,18 +26,7 @@ export function validTwilioSignature(authToken: string, signature: string | null
   }
 }
 
-/** Twilio's status words → our MessageStatus, with an order so late/out-of-order callbacks never go backwards. */
-export const STATUS_MAP: Record<string, { status: "QUEUED" | "SENT" | "DELIVERED" | "READ" | "FAILED"; rank: number }> = {
-  accepted: { status: "QUEUED", rank: 0 },
-  scheduled: { status: "QUEUED", rank: 0 },
-  queued: { status: "QUEUED", rank: 0 },
-  sending: { status: "QUEUED", rank: 0 },
-  sent: { status: "SENT", rank: 1 },
-  delivered: { status: "DELIVERED", rank: 2 },
-  read: { status: "READ", rank: 3 },
-  failed: { status: "FAILED", rank: 4 },
-  undelivered: { status: "FAILED", rank: 4 },
-};
+export { STATUS_MAP } from "./status";
 
 // ── Outbox executor: "twilio.message" (payload: { messageId }) ──
 // The message text is read from the Message row, so a retry in the worker sends exactly what the employee wrote.
