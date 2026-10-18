@@ -21,7 +21,7 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   const companyId = qFrom(sp.company);
   const page = pageFrom(sp.page);
   const db = scoped(ctx);
-  const digits = q.replace(/\D/g, "");
+  const digits = q.replace(/\D/g, "").replace(/^0+/, "");
   const where: Prisma.ContactWhereInput = {
     deletedAt: null,
     ...(companyId ? { companyId } : {}),
