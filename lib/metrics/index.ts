@@ -8,6 +8,8 @@ export type Scope = { workspaceId: string; userId?: string }; // userId set → 
 
 const ownerFilter = (s: Scope): Prisma.LeadWhereInput => (s.userId ? { ownerId: s.userId } : {});
 
+export * from "./figures";
+
 // ───────────── Recovery queue (F3.7) ─────────────
 
 export type RecoveryReason = { kind: "overdue" | "unassigned" | "new" | "escalated" | "idle" | "away"; text: string };

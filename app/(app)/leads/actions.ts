@@ -8,6 +8,7 @@ import { act } from "@/lib/core/action";
 import { HttpError, NotFound } from "@/lib/core/errors";
 import { acknowledge } from "@/lib/leads/acknowledge";
 import { reassign } from "@/lib/leads/reassign";
+import { leadFilterWhere } from "@/lib/metrics";
 import { findOrCreateContact, normalizePhone } from "@/lib/leads/contact";
 import { intake } from "@/lib/leads/intake";
 
@@ -20,14 +21,21 @@ export type LeadRow = {
 };
 
 /** Open leads, newest first. People without company-wide access see only their own. */
-export async function listLeads() {
+const LeadFilter = z.enum(["today", "escalated24h"]).optional();
+
+export async function listLeads(input: { filter?: string } = {}) {
   return act(async (): Promise<LeadRow[]> => {
     const ctx = await requireUser();
     requirePermission(ctx, "crm.view");
     const db = scoped(ctx);
     const mine = !ctx.permissions.has("dashboard.company");
+    const filter = LeadFilter.catch(undefined).parse(input.filter);
+    // A dashboard drill-down uses the same where-builder as the tile, so the numbers match (Q12).
+    const where = filter
+      ? await leadFilterWhere({ workspaceId: ctx.workspaceId, userId: mine ? ctx.userId : undefined }, filter)
+      : { status: { not: "CLOSED" as const }, ...(mine ? { ownerId: ctx.userId } : {}) };
     const leads = await db.lead.findMany({
-      where: { status: { not: "CLOSED" }, ...(mine ? { ownerId: ctx.userId } : {}) },
+      where,
       orderBy: { createdAt: "desc" },
       take: 100,
       include: { contact: { select: { name: true } }, assignments: { orderBy: { createdAt: "desc" }, take: 1, select: { reason: true } } },

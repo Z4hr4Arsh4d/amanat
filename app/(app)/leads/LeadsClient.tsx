@@ -1,6 +1,7 @@
 "use client";
 // P2 owns. Leads list with source badge and routing reason; refreshes every 3 seconds (Q11).
 import { useState } from "react";
+import Link from "next/link";
 import useSWR from "swr";
 import { useAction } from "@/components/ui/useAction";
 import { ui } from "@/components/ui/styles";
@@ -15,14 +16,16 @@ const STATUS = {
   NEW: "● New", ASSIGNED: "⏳ Waiting for reply", ACKNOWLEDGED: "✓ Acknowledged", UNASSIGNED: "⚠ Nobody assigned", CLOSED: "Closed",
 } as const;
 
-async function fetchLeads(): Promise<{ rows: LeadRow[]; receivedAt: number }> {
-  const r = await listLeads();
+const FILTER_LABEL: Record<string, string> = { today: "new leads today", escalated24h: "leads escalated in the last 24 hours (a lead escalated twice appears once)" };
+
+async function fetchLeads(filter?: string): Promise<{ rows: LeadRow[]; receivedAt: number }> {
+  const r = await listLeads({ filter });
   if (!r.ok) throw new Error(r.error);
   return { rows: r.data, receivedAt: Date.now() };
 }
 
-export function LeadsClient({ canCreate, canManageTeam, canReassign }: { canCreate: boolean; canManageTeam: boolean; canReassign: boolean }) {
-  const { data, error, mutate } = useSWR("leads", fetchLeads, { refreshInterval: 3000 });
+export function LeadsClient({ canCreate, canManageTeam, canReassign, filter }: { canCreate: boolean; canManageTeam: boolean; canReassign: boolean; filter?: string }) {
+  const { data, error, mutate } = useSWR(filter ? `leads:${filter}` : "leads", () => fetchLeads(filter), { refreshInterval: 3000 });
   const { pending, run } = useAction();
   const [open, setOpen] = useState(false);
   const rows = data?.rows;
@@ -39,6 +42,11 @@ export function LeadsClient({ canCreate, canManageTeam, canReassign }: { canCrea
         )}
       </div>
 
+      {filter && (
+        <p className="text-sm text-stone-800" role="status">
+          Showing: {FILTER_LABEL[filter] ?? "filtered leads"}. <Link href="/leads" className="underline">Show all my open leads</Link>
+        </p>
+      )}
       <StatusSelector />
       {canManageTeam && <TeamPanel />}
 

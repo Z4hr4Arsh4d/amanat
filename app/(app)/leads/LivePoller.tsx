@@ -45,7 +45,7 @@ export function LivePoller() {
         if (!seen.current.has(l.id)) { seen.current.add(l.id); changed = true; }
       }
       if (changed) {
-        mutate((key) => (typeof key === "string" && LIST_KEYS.includes(key)) || (Array.isArray(key) && key[0] === "lead-slot"));
+        mutate((key) => (typeof key === "string" && (LIST_KEYS.includes(key) || key.startsWith("leads:"))) || (Array.isArray(key) && key[0] === "lead-slot"));
         mutate("bell");
       }
     },
