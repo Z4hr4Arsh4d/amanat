@@ -77,7 +77,7 @@ function Row({ p, canRequest, onChanged, compact }: { p: PaymentRow; canRequest:
         <div className="sm:col-span-2">
           <dt className="inline">Stripe reference: </dt>
           <dd className="inline break-all font-mono">
-            {p.stripePaymentIntentId && !p.stripePaymentIntentId.includes("_sim")
+            {p.stripePaymentIntentId && !/_sim|_seed/.test(p.stripePaymentIntentId)
               ? <a className="underline" target="_blank" rel="noreferrer" href={`https://dashboard.stripe.com/test/payments/${p.stripePaymentIntentId}`}>{ref}</a>
               : ref}
           </dd>
@@ -106,7 +106,7 @@ function Row({ p, canRequest, onChanged, compact }: { p: PaymentRow; canRequest:
 export function PaymentListView({ query, compact, emptyText, onData }: { query: Record<string, string>; compact?: boolean; emptyText?: string; onData?: (d: PaymentList) => void }) {
   const [page, setPage] = useState(1);
   const qs = new URLSearchParams({ ...query, page: String(page) });
-  const { data, error, mutate } = useSWR<PaymentList>(`/payments/data?${qs}`, fetchJson, { refreshInterval: 3000, keepPreviousData: true, onSuccess: onData });
+  const { data, error, mutate } = useSWR<PaymentList>(`/payments/data?${qs}`, fetchJson, { refreshInterval: 3000, keepPreviousData: true, ...(onData ? { onSuccess: onData } : {}) });
   if (error) return <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900"><span aria-hidden="true">⚠ </span>{(error as Error).message}</p>;
   if (!data) return <p className="text-sm text-stone-600"><Spinner /> Loading payments…</p>;
   return (
@@ -142,6 +142,7 @@ export function PaymentRequestForm({ opportunityId, onCreated }: { opportunityId
   const shownAmount = amount ?? (opp?.value != null ? String(opp.value) : "");
   const shownCurrency = currency ?? (opp?.currency === "USD" ? "USD" : "PKR");
 
+  if (error && /permission/i.test((error as Error).message)) return <p className="text-sm text-stone-600">Creating payment links needs the “Create payment requests” permission. Ask an admin if you need it.</p>;
   if (error) return <p role="alert" className="text-sm text-red-900"><span aria-hidden="true">⚠ </span>{(error as Error).message}</p>;
   if (opportunityId && data && !opp) return <p className="text-sm text-stone-600">Payment requests are not available for this opportunity (it is lost, deleted, or not yours).</p>;
   return (
