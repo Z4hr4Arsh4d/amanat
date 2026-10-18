@@ -9,6 +9,7 @@ import { Countdown } from "@/app/(app)/leads/Countdown";
 const STATUS = {
   NEW: "● New", ASSIGNED: "⏳ Waiting for reply", ACKNOWLEDGED: "✓ Acknowledged", UNASSIGNED: "⚠ Nobody assigned", CLOSED: "Closed",
 } as const;
+const SOURCE = { WEB_FORM: "🌐 Web form", WHATSAPP: "💬 WhatsApp", MANUAL: "✍️ Manual" } as const;
 const KIND = { AUTO: "Assigned", ESCALATION: "Escalated", MANUAL: "Reassigned", ABSENCE: "Moved (away)" } as const;
 
 async function fetchInfo(contactId: string): Promise<{ info: ContactLeadInfo; receivedAt: number }> {
@@ -30,6 +31,7 @@ export function LeadSlot({ contactId }: { contactId: string }) {
     <section className={`${ui.card} space-y-2`} aria-label="Lead">
       <h2 className="font-semibold text-stone-900">Lead</h2>
       <p className="text-sm text-stone-800">
+        <span className="rounded-full border border-stone-300 px-2 py-0.5 text-xs">{SOURCE[lead.source]}</span>{" "}
         <span className="rounded-full border border-stone-300 px-2 py-0.5 text-xs">{STATUS[lead.status]}</span>{" "}
         Owner: <span className="font-medium">{lead.isMine ? "You" : (lead.ownerName ?? "nobody yet")}</span>
         {lead.ownerOnLeave && <span className="ml-2 text-amber-900">⚠ Owner away</span>}
