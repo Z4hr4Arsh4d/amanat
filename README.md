@@ -47,7 +47,29 @@ Webhooks need a public HTTPS URL: run `ngrok http 3000` and set `APP_URL` to the
 _TODO_
 
 ### P2 — Lead engine & Telegram
-_TODO: how to create the bot, link a user, demo timers._
+**Pages:** `/leads` (my leads, countdown, Acknowledge, team panel, New lead), `/recovery`, `/dashboard`, `/lists`, `/settings/assignment`, public form `/f/<workspace-slug>`.
+
+**1. Create the Telegram bot (once)**
+1. In Telegram open **@BotFather** and send `/newbot`. Name it `Amanat Alerts`, pick a username ending in `bot`.
+2. Copy the token it gives you (looks like `123456:ABC...`).
+3. Telegram only talks to public **https** addresses. Run `ngrok http 3000` and set `APP_URL` in `.env` to the https address, then restart `npm run dev`.
+4. Log in as an Owner/Admin, open **Integrations**, find the **Telegram** card, paste the token and press **Connect**. Amanat checks the token, sets the webhook with a random secret, and stores both encrypted. Only a masked token is ever shown.
+
+**2. Link a person to the bot**
+- Each employee presses **Connect Telegram** (Telegram card or profile), which opens the bot with a one-time link. Press **Start** in Telegram. The bot replies "Connected to Amanat ✅".
+- **Send test alert** checks it works. Alerts have an **✅ Acknowledge** button: tapping it acknowledges the lead and the message changes to "Acknowledged by you at HH:MM". If the lead already moved on, it says "This lead has moved to <name>".
+- Failed alerts are retried 3 times (after 5s, 15s, 45s), then shown as failed with a plain reason in the card.
+
+**3. Run the worker** (a second terminal): `npm run worker`. It checks every 2 seconds for leads past their deadline and escalates them, and retries Telegram alerts. Nothing lives in memory, so it is safe to stop and restart.
+
+**4. Demo timers.** Everything is in seconds on **Settings → Assignment**: acknowledge window, idle period, and the seconds for each escalation level. For a quick demo use an acknowledge window of 30 and levels of 30 / 30 / 60.
+
+**5. Show the proofs**
+- *Restart safety:* assign a lead, press Ctrl+C on the worker, wait past the countdown, start it again: the lead escalates exactly once.
+- *Two workers at once:* start `npm run worker` in two terminals. Each overdue lead still escalates once (conditional update on `version`).
+- *Automated check:* `npx tsx --env-file=.env worker/test-escalation.ts` creates its own throwaway workspace, escalates one overdue lead from two workers at the same instant and asserts exactly one escalation.
+
+**Rules worth knowing.** Routing reason: every assignment records who was skipped and why. Absence: unacknowledged leads move at once; acknowledged leads stay but are flagged "Owner away" and appear in the recovery queue. Filters: the contacts and opportunities pages read `?f=` with `filters.parseFilterParam` + `filters.buildWhere` (see `lib/shared/contracts.ts`).
 
 ### P3 — Twilio, Stripe, Google
 _TODO: sandbox join phrase, Stripe webhook events to enable, Google test users, what each integration can and can't do._
