@@ -527,6 +527,7 @@ model Conversation {
   assigneeId    String?
   opportunityId String?
   lastMessageAt DateTime  @default(now())
+  lastReadAt    DateTime? // P3: when the assignee last opened it (unread count)
   messages      Message[]
 
   @@unique([contactId, channel])
