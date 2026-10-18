@@ -1,8 +1,8 @@
 // P1 owns the shell. Nav items come from lib/shared/nav.ts (append-only).
-import Link from "next/link";
 import { Toaster } from "sonner";
 import { requireUserPage, can } from "@/lib/core/session";
 import { NAV } from "@/lib/shared/nav";
+import { NavLinks } from "@/components/ui/NavLinks";
 import { logoutAction, logoutAllAction } from "../(auth)/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
@@ -13,22 +13,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <input id="nav-toggle" type="checkbox" className="peer sr-only" aria-label="Toggle navigation" />
       <header className="flex items-center justify-between border-b border-stone-200 bg-white px-4 py-3 md:hidden">
         <span className="font-semibold text-emerald-800">AMANAT</span>
-        <label htmlFor="nav-toggle" className="cursor-pointer rounded border border-stone-300 px-3 py-1 text-sm">Menu</label>
+        <label htmlFor="nav-toggle" className="cursor-pointer rounded border border-stone-300 px-3 py-1 text-sm">☰ Menu</label>
       </header>
       <nav
         aria-label="Main"
         className="hidden w-full flex-col border-r border-stone-200 bg-white p-4 peer-checked:flex md:flex md:w-60 md:shrink-0"
       >
         <span className="mb-4 hidden font-semibold tracking-wide text-emerald-800 md:block">AMANAT</span>
-        <ul className="space-y-1">
-          {items.map((n) => (
-            <li key={n.href}>
-              <Link href={n.href} className="block rounded px-3 py-2 text-sm hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
-                {n.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <NavLinks items={items.map((n) => ({ href: n.href, label: n.label }))} />
         <div className="mt-auto border-t border-stone-200 pt-4 text-sm">
           <p className="font-medium">{ctx.name}</p>
           <p className="text-stone-600">{ctx.level}</p>
