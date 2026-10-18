@@ -6,6 +6,8 @@ import { useAction } from "@/components/ui/useAction";
 import { ui } from "@/components/ui/styles";
 import { acknowledgeLead, createManualLead, listLeads, type LeadRow } from "./actions";
 import { Countdown } from "./Countdown";
+import { StatusSelector } from "./StatusSelector";
+import { TeamPanel } from "./TeamPanel";
 
 const SOURCE = { WEB_FORM: "🌐 Web form", WHATSAPP: "💬 WhatsApp", MANUAL: "✍️ Manual" } as const;
 const STATUS = {
@@ -18,7 +20,7 @@ async function fetchLeads(): Promise<{ rows: LeadRow[]; receivedAt: number }> {
   return { rows: r.data, receivedAt: Date.now() };
 }
 
-export function LeadsClient({ canCreate }: { canCreate: boolean }) {
+export function LeadsClient({ canCreate, canManageTeam }: { canCreate: boolean; canManageTeam: boolean }) {
   const { data, error, mutate } = useSWR("leads", fetchLeads, { refreshInterval: 3000 });
   const { pending, run } = useAction();
   const [open, setOpen] = useState(false);
@@ -35,6 +37,9 @@ export function LeadsClient({ canCreate }: { canCreate: boolean }) {
           </button>
         )}
       </div>
+
+      <StatusSelector />
+      {canManageTeam && <TeamPanel />}
 
       {open && (
         <form

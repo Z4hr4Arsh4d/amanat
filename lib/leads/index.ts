@@ -10,6 +10,6 @@ export { markActed } from "./acknowledge";
 export { acknowledge } from "./acknowledge";
 
 /** Called by setStatus() when someone goes On leave / Offline (F3.6). */
-export async function handleAbsence(input: { workspaceId: string; userId: string }): Promise<void> {
-  void input;
-}
+export { handleAbsence } from "./absence";
+
+export { setStatus } from "./availability";
