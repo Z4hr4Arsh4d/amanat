@@ -89,7 +89,7 @@ export async function chooseAssignee(
  * First assignment of a lead (kind AUTO). Safe to call twice: the second call finds the lead
  * already assigned (or changed by someone else) and does nothing. Returns the lead as it is now.
  */
-export async function autoAssign(workspaceId: string, leadId: string): Promise<Lead | null> {
+export async function autoAssign(workspaceId: string, leadId: string, quiet = false): Promise<Lead | null> {
   const cfg0 = await ensureConfig(workspaceId);
   const candidates = await loadCandidates(workspaceId);
   const busy = await loadBusy(cfg0, candidates);
@@ -101,42 +101,60 @@ export async function autoAssign(workspaceId: string, leadId: string): Promise<L
     const lead = await tx.lead.findFirst({ where: { id: leadId, workspaceId }, include: { contact: { select: { name: true } } } });
     if (!lead || (lead.status !== "NEW" && lead.status !== "UNASSIGNED")) return null;
 
-    const choice = await chooseAssignee(tx, workspaceId, cfg, candidates, busy);
+    const rotation = await chooseAssignee(tx, workspaceId, cfg, candidates, busy);
     const now = new Date();
+    let owner: Candidate | null = rotation.user;
+    let level = 0;
+    let seconds = cfg.ackWindowSeconds;
+    let reason = rotation.reason;
 
-    if (!choice.user) {
+    if (!owner) {
+      // Nobody is free: go straight to the first Backup / Manager level instead of waiting (PLAN.md §3.3).
+      const levels = levelsOf(cfg);
+      const first = levels.findIndex((l) => l.type !== "NEXT_ELIGIBLE");
+      if (first >= 0) {
+        const f = await findTarget(tx, workspaceId, cfg, candidates, busy, { excludeIds: [], currentOwnerId: null, startLevel: first + 1 });
+        if (f.target) {
+          owner = f.target.user; level = f.target.level; seconds = f.target.seconds;
+          reason = `${rotation.reason} · ${f.target.note}`;
+        }
+      }
+    }
+
+    if (!owner) {
+      if (quiet) return null; // retry from the worker: stay silent while nobody is free
       const r = await tx.lead.updateMany({
         where: { id: leadId, workspaceId, version: lead.version },
         data: { status: "UNASSIGNED", ownerId: null, deadlineAt: null, version: { increment: 1 } },
       });
       if (r.count === 0) return null; // someone else changed it first
-      await tx.leadAssignment.create({ data: { workspaceId, leadId, kind: "AUTO", level: 0, reason: choice.reason } });
-      return { lead, choice, owner: null as Candidate | null };
+      await tx.leadAssignment.create({ data: { workspaceId, leadId, kind: "AUTO", level: 0, reason } });
+      return { lead, choice: { user: null, reason } as Choice, owner: null as Candidate | null };
     }
 
-    const owner = choice.user;
     const r = await tx.lead.updateMany({
       where: { id: leadId, workspaceId, version: lead.version },
       data: {
         ownerId: owner.id, status: "ASSIGNED", assignedAt: now,
         firstAssignedAt: lead.firstAssignedAt ?? now,
-        deadlineAt: new Date(now.getTime() + cfg.ackWindowSeconds * 1000),
+        deadlineAt: new Date(now.getTime() + seconds * 1000),
+        escalationLevel: level,
         version: { increment: 1 },
       },
     });
     if (r.count === 0) return null;
     await tx.leadAssignment.create({
-      data: { workspaceId, leadId, fromUserId: null, toUserId: owner.id, kind: "AUTO", level: 0, reason: choice.reason },
+      data: { workspaceId, leadId, fromUserId: null, toUserId: owner.id, kind: "AUTO", level, reason },
     });
-    await tx.assignmentConfig.update({ where: { workspaceId }, data: { rrCursor: owner.id } });
+    if (rotation.user) await tx.assignmentConfig.update({ where: { workspaceId }, data: { rrCursor: owner.id } });
     await tx.notification.create({
       data: {
         workspaceId, userId: owner.id, leadId, channel: "INAPP", status: "SENT",
         title: "New lead assigned to you",
-        body: `${lead.contact.name} (${SOURCE_LABEL[lead.source]}). Acknowledge within ${cfg.ackWindowSeconds}s.`,
+        body: `${lead.contact.name} (${SOURCE_LABEL[lead.source]}). Acknowledge within ${seconds}s.`,
       },
     });
-    return { lead, choice, owner };
+    return { lead, choice: { user: owner, reason } as Choice, owner };
   });
 
   if (done) {
@@ -151,4 +169,56 @@ export async function autoAssign(workspaceId: string, leadId: string): Promise<L
     });
   }
   return prisma.lead.findFirst({ where: { id: leadId, workspaceId } });
+}
+
+// ───────────── escalation levels (PLAN.md §3.5) ─────────────
+
+export type Level = { type: "NEXT_ELIGIBLE" | "BACKUP" | "MANAGER"; seconds: number };
+
+export function levelsOf(cfg: AssignmentConfig): Level[] {
+  const raw = Array.isArray(cfg.levels) ? (cfg.levels as unknown[]) : [];
+  return raw.filter((l): l is Level => {
+    const x = l as Partial<Level> | null;
+    return !!x && (x.type === "NEXT_ELIGIBLE" || x.type === "BACKUP" || x.type === "MANAGER") && typeof x.seconds === "number" && x.seconds > 0;
+  });
+}
+
+export type Target = { user: Candidate; level: number; seconds: number; viaRotation: boolean; note: string };
+
+/**
+ * Starting at level `startLevel` (1-based), find who should hold the lead next.
+ * A level nobody can fill is skipped (and mentioned in `notes`) so the chain keeps moving.
+ * Call inside a transaction that holds the config row lock.
+ */
+export async function findTarget(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  cfg: AssignmentConfig,
+  candidates: Candidate[],
+  busy: Map<string, Date>,
+  opts: { excludeIds: string[]; currentOwnerId: string | null; startLevel: number },
+): Promise<{ target: Target | null; notes: string[] }> {
+  const levels = levelsOf(cfg);
+  const notes: string[] = [];
+  for (let i = Math.max(0, opts.startLevel - 1); i < levels.length; i++) {
+    const lvl = levels[i];
+    if (lvl.type === "NEXT_ELIGIBLE") {
+      const c = await chooseAssignee(tx, workspaceId, cfg, candidates, busy, opts.excludeIds);
+      if (c.user) return { target: { user: c.user, level: i + 1, seconds: lvl.seconds, viaRotation: true, note: c.reason }, notes };
+      notes.push(c.reason);
+    } else if (lvl.type === "BACKUP") {
+      const u = candidates.find((c) => c.id === cfg.backupUserId);
+      if (u && !opts.excludeIds.includes(u.id)) {
+        return { target: { user: u, level: i + 1, seconds: lvl.seconds, viaRotation: false, note: `Sent to the backup person, ${u.name}` }, notes };
+      }
+      notes.push(u ? `Backup ${u.name} already had this lead` : "No backup person is set");
+    } else {
+      const m = candidates.find((c) => c.id === cfg.managerUserId);
+      if (m && m.id !== opts.currentOwnerId) {
+        return { target: { user: m, level: i + 1, seconds: lvl.seconds, viaRotation: false, note: `Sent to the manager, ${m.name}` }, notes };
+      }
+      notes.push(m ? `Manager ${m.name} already has this lead` : "No manager is set");
+    }
+  }
+  return { target: null, notes };
 }

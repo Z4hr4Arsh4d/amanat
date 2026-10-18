@@ -7,6 +7,7 @@ import { scoped } from "@/lib/core/scoped";
 import { act } from "@/lib/core/action";
 import { HttpError, NotFound } from "@/lib/core/errors";
 import { acknowledge } from "@/lib/leads/acknowledge";
+import { reassign } from "@/lib/leads/reassign";
 import { findOrCreateContact, normalizePhone } from "@/lib/leads/contact";
 import { intake } from "@/lib/leads/intake";
 
@@ -104,5 +105,30 @@ export async function createManualLead(input: z.input<typeof NewLead>) {
     const lead = await intake({ workspaceId: ctx.workspaceId, contactId: contact.id, source: "MANUAL", actorId: ctx.userId });
     revalidatePath("/leads");
     return { id: lead.id };
+  });
+}
+
+export async function listAssignees() {
+  return act(async () => {
+    const ctx = await requireUser();
+    requirePermission(ctx, "leads.reassign");
+    return scoped(ctx).user.findMany({ where: { isActive: true }, select: { id: true, name: true, status: true }, orderBy: { name: "asc" } });
+  });
+}
+
+export async function reassignLead(input: { leadId: string; toUserId: string }) {
+  return act(async () => {
+    const ctx = await requireUser();
+    requirePermission(ctx, "leads.reassign");
+    const leadId = z.string().trim().min(1).max(64).parse(input.leadId);
+    const toUserId = z.string().trim().min(1).max(64).parse(input.toUserId);
+    const db = scoped(ctx);
+    if (!(await db.lead.findFirst({ where: { id: leadId }, select: { id: true } }))) throw NotFound();
+    if (!(await db.user.findFirst({ where: { id: toUserId }, select: { id: true } }))) throw NotFound();
+    const r = await reassign({ workspaceId: ctx.workspaceId, leadId, toUserId, actorId: ctx.userId, actorLabel: ctx.name });
+    if (!r.ok) throw new HttpError(409, r.message);
+    revalidatePath("/leads");
+    revalidatePath("/recovery");
+    return { message: r.message };
   });
 }

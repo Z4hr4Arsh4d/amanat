@@ -13,3 +13,7 @@ export { acknowledge } from "./acknowledge";
 export { handleAbsence } from "./absence";
 
 export { setStatus } from "./availability";
+
+/** Manual reassign (needs the leads.reassign permission, checked by the caller). */
+export { reassign } from "./reassign";
+export { escalate, escalationSweep } from "./escalate";

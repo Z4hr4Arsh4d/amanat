@@ -8,6 +8,7 @@ import { acknowledgeLead, createManualLead, listLeads, type LeadRow } from "./ac
 import { Countdown } from "./Countdown";
 import { StatusSelector } from "./StatusSelector";
 import { TeamPanel } from "./TeamPanel";
+import { ReassignMenu } from "./ReassignMenu";
 
 const SOURCE = { WEB_FORM: "🌐 Web form", WHATSAPP: "💬 WhatsApp", MANUAL: "✍️ Manual" } as const;
 const STATUS = {
@@ -20,7 +21,7 @@ async function fetchLeads(): Promise<{ rows: LeadRow[]; receivedAt: number }> {
   return { rows: r.data, receivedAt: Date.now() };
 }
 
-export function LeadsClient({ canCreate, canManageTeam }: { canCreate: boolean; canManageTeam: boolean }) {
+export function LeadsClient({ canCreate, canManageTeam, canReassign }: { canCreate: boolean; canManageTeam: boolean; canReassign: boolean }) {
   const { data, error, mutate } = useSWR("leads", fetchLeads, { refreshInterval: 3000 });
   const { pending, run } = useAction();
   const [open, setOpen] = useState(false);
@@ -93,6 +94,9 @@ export function LeadsClient({ canCreate, canManageTeam }: { canCreate: boolean; 
               <button type="button" disabled={pending} onClick={() => ack(l.id)} className={`${ui.btnPrimary} mt-3 w-full px-6 py-3 text-base sm:w-auto`}>
                 ✅ Acknowledge
               </button>
+            )}
+            {canReassign && l.status !== "NEW" && (
+              <div className="mt-3"><ReassignMenu leadId={l.id} currentOwnerName={l.ownerName} onDone={() => mutate()} /></div>
             )}
             {l.reason && <p className={`${ui.muted} mt-1`}><span className="font-medium text-stone-800">Why: </span>{l.reason}</p>}
           </li>
