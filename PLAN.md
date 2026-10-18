@@ -2,7 +2,7 @@
 
 > *Every lead is an amanat.* One person holds it at any moment, every handover is recorded, and the record cannot be changed.
 
-**Team:** P1 = Records · P2 = Lead Engine · P3 = Integrations
+**Team:** P1 = Records (**Zahra**) · P2 = Lead Engine (**Hadia**) · P3 = Integrations (**Imtiaz**)
 **Goal:** every F, I and Q requirement done and demonstrable. Nothing left out.
 **Clock:** T+0:00 is when you start. Merge checkpoints at **T+0:30, T+1:15, T+2:00, T+2:45, T+3:20**. Code freeze at **T+3:30**.
 
