@@ -220,3 +220,5 @@ npx tsx --env-file=.env lib/integrations/dev/simulate-stripe.ts fail | expire | 
 ```
 
 **Google Calendar** — set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; redirect URI `{APP_URL}/api/oauth/google/callback`; add every demo Gmail as a test user (testing apps only accept listed users, and tokens may expire after 7 days).
+
+**Judge demo run:** see [`lib/integrations/DEMO.md`](lib/integrations/DEMO.md) for the step-by-step script and pre-demo checklist.
