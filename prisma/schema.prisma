@@ -1,0 +1,609 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// AMANAT SCHEMA — frozen at T+0:30.
+// Rule: after this commit you may only ADD COLUMNS to models you own.
+// Owners: P1 = Core/CRM/Audit · P2 = Leads/Notify/Dashboard · P3 = Integrations
+// Use `npm run db:push` (no migration files).
+// ─────────────────────────────────────────────────────────────────────────────
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ═══════════════════════════ P1 · CORE ═══════════════════════════
+
+enum Level {
+  OWNER
+  ADMIN
+  USER
+}
+
+enum UserStatus {
+  AVAILABLE
+  BUSY
+  ON_LEAVE
+  OFFLINE
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  timezone  String   @default("Asia/Karachi")
+  createdAt DateTime @default(now())
+
+  users            User[]
+  roles            Role[]
+  invites          Invite[]
+  companies        Company[]
+  contacts         Contact[]
+  pipelines        Pipeline[]
+  fieldDefs        FieldDef[]
+  opportunities    Opportunity[]
+  savedLists       SavedList[]
+  activities       Activity[]
+  auditLogs        AuditLog[]
+  leads            Lead[]
+  assignmentConfig AssignmentConfig?
+  notifications    Notification[]
+  integrations     Integration[]
+  integrationEvents IntegrationEvent[]
+  conversations    Conversation[]
+  payments         Payment[]
+  appointments     Appointment[]
+}
+
+model User {
+  id                String     @id @default(cuid())
+  workspaceId       String
+  workspace         Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email             String
+  name              String
+  passwordHash      String
+  level             Level      @default(USER)
+  roleId            String?
+  role              Role?      @relation(fields: [roleId], references: [id], onDelete: SetNull)
+  status            UserStatus @default(AVAILABLE)
+  timezone          String     @default("Asia/Karachi")
+  telegramChatId    String?
+  telegramLinkToken String?    @unique
+  isActive          Boolean    @default(true)
+  createdAt         DateTime   @default(now())
+
+  sessions           Session[]
+  calendarConnection CalendarConnection?
+  dashboardPref      DashboardPref?
+
+  @@unique([workspaceId, email])
+  @@index([workspaceId, status])
+}
+
+model Role {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  permissions String[]
+  users       User[]
+
+  @@unique([workspaceId, name])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+model LoginAttempt {
+  id        String   @id @default(cuid())
+  email     String
+  ip        String
+  success   Boolean
+  createdAt DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ip, createdAt])
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  email       String
+  level       Level     @default(USER)
+  roleId      String?
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+// ═══════════════════════════ P1 · CRM ═══════════════════════════
+
+enum FieldEntity {
+  CONTACT
+  COMPANY
+  OPPORTUNITY
+}
+
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  DROPDOWN
+  CHECKBOX
+}
+
+enum StageKind {
+  OPEN
+  WON
+  LOST
+}
+
+model Company {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  customFields Json      @default("{}")
+  version      Int       @default(0)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  contacts     Contact[]
+
+  @@index([workspaceId])
+}
+
+model Contact {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  companyId    String?
+  company      Company?  @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  name         String
+  email        String?
+  phone        String? // E.164, e.g. +923001234567
+  optedOut     Boolean   @default(false)
+  optedOutAt   DateTime?
+  ownerId      String?
+  tags         String[]
+  customFields Json      @default("{}")
+  version      Int       @default(0)
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  opportunities Opportunity[]
+  leads         Lead[]
+  conversations Conversation[]
+  payments      Payment[]
+  appointments  Appointment[]
+  activities    Activity[]
+
+  @@unique([workspaceId, phone])
+  @@index([workspaceId, name])
+}
+
+model Pipeline {
+  id            String        @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name          String
+  isDefault     Boolean       @default(false)
+  stages        Stage[]
+  fieldDefs     FieldDef[]
+  opportunities Opportunity[]
+}
+
+model Stage {
+  id               String        @id @default(cuid())
+  workspaceId      String
+  pipelineId       String
+  pipeline         Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  name             String
+  order            Int
+  kind             StageKind     @default(OPEN)
+  requiredFieldIds String[]
+  opportunities    Opportunity[]
+
+  @@index([pipelineId, order])
+}
+
+model FieldDef {
+  id          String      @id @default(cuid())
+  workspaceId String
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  entity      FieldEntity
+  pipelineId  String? // only for OPPORTUNITY fields; null = all pipelines
+  pipeline    Pipeline?   @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
+  key         String
+  label       String
+  type        FieldType
+  options     String[]
+  order       Int         @default(0)
+  deletedAt   DateTime?
+
+  @@unique([workspaceId, entity, key])
+}
+
+model Opportunity {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  pipelineId   String
+  pipeline     Pipeline  @relation(fields: [pipelineId], references: [id])
+  stageId      String
+  stage        Stage     @relation(fields: [stageId], references: [id])
+  contactId    String
+  contact      Contact   @relation(fields: [contactId], references: [id])
+  ownerId      String?
+  title        String
+  value        Decimal   @default(0) @db.Decimal(14, 2)
+  currency     String    @default("PKR")
+  customFields Json      @default("{}")
+  version      Int       @default(0)
+  createdAt    DateTime  @default(now())
+  closedAt     DateTime?
+  deletedAt    DateTime?
+  payments     Payment[]
+  appointments Appointment[]
+
+  @@index([workspaceId, stageId])
+  @@index([workspaceId, ownerId])
+}
+
+model SavedList {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+  name        String
+  entity      String // "contact" | "opportunity" | "lead"
+  filters     Json
+  shared      Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+model Activity {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contactId     String?
+  contact       Contact?  @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  opportunityId String?
+  leadId        String?
+  actorId       String? // null = system
+  type          String // note|stage_change|assignment|field_edit|message|payment|appointment|lead_created|escalation|acknowledged
+  summary       String
+  data          Json      @default("{}")
+  createdAt     DateTime  @default(now())
+
+  @@index([workspaceId, contactId, createdAt])
+  @@index([workspaceId, opportunityId, createdAt])
+}
+
+// ═══════════════════════════ P1 · AUDIT (append-only, hash-chained) ═══════════════════════════
+
+model AuditLog {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  seq         Int
+  actorId     String? // null = system
+  actorLabel  String
+  action      String
+  targetType  String
+  targetId    String?
+  before      Json?
+  after       Json?
+  prevHash    String
+  hash        String
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, seq])
+  @@index([workspaceId, action, createdAt])
+}
+
+// ═══════════════════════════ P2 · LEADS ═══════════════════════════
+
+enum LeadSource {
+  WEB_FORM
+  WHATSAPP
+  MANUAL
+}
+
+enum LeadStatus {
+  NEW
+  ASSIGNED
+  ACKNOWLEDGED
+  UNASSIGNED
+  CLOSED
+}
+
+enum AssignmentKind {
+  AUTO
+  ESCALATION
+  MANUAL
+  ABSENCE
+}
+
+model Lead {
+  id                  String     @id @default(cuid())
+  workspaceId         String
+  workspace           Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contactId           String
+  contact             Contact    @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  source              LeadSource
+  status              LeadStatus @default(NEW)
+  ownerId             String?
+  firstAssignedAt     DateTime?
+  assignedAt          DateTime?
+  deadlineAt          DateTime?
+  acknowledgedAt      DateTime?
+  firstAcknowledgedAt DateTime?
+  escalationLevel     Int        @default(0)
+  escalationCount     Int        @default(0)
+  lastActionAt        DateTime?
+  ownerOnLeaveFlag    Boolean    @default(false)
+  version             Int        @default(0)
+  createdAt           DateTime   @default(now())
+  assignments         LeadAssignment[]
+
+  @@index([status, deadlineAt]) // escalation sweep
+  @@index([workspaceId, ownerId, status])
+}
+
+model LeadAssignment {
+  id          String         @id @default(cuid())
+  workspaceId String
+  leadId      String
+  lead        Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromUserId  String?
+  toUserId    String?
+  kind        AssignmentKind
+  level       Int            @default(0)
+  reason      String
+  actorId     String? // null = system
+  createdAt   DateTime       @default(now())
+
+  @@index([workspaceId, kind, createdAt])
+}
+
+model AssignmentConfig {
+  id               String    @id @default(cuid())
+  workspaceId      String    @unique
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  maxOpenLeads     Int       @default(5)
+  ackWindowSeconds Int       @default(60)
+  idleSeconds      Int       @default(300)
+  levels           Json      @default("[{\"type\":\"NEXT_ELIGIBLE\",\"seconds\":60},{\"type\":\"BACKUP\",\"seconds\":60},{\"type\":\"MANAGER\",\"seconds\":120}]")
+  backupUserId     String?
+  managerUserId    String?
+  rrCursor         String? // id of last user who got a lead
+  useCalendarBusy  Boolean   @default(true)
+  autoReplyCustomer Boolean  @default(true)
+}
+
+enum NotificationChannel {
+  INAPP
+  TELEGRAM
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id            String              @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace           @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId        String
+  leadId        String?
+  channel       NotificationChannel
+  title         String
+  body          String
+  status        NotificationStatus  @default(PENDING)
+  attempts      Int                 @default(0)
+  lastError     String?
+  nextAttemptAt DateTime?
+  readAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model DashboardPref {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  hiddenTiles String[]
+}
+
+// ═══════════════════════════ P3 · INTEGRATIONS ═══════════════════════════
+
+enum Provider {
+  TWILIO
+  STRIPE
+  GOOGLE
+  TELEGRAM
+}
+
+enum IntegrationStatus {
+  NOT_CONNECTED
+  CONNECTED
+  ERROR
+}
+
+model Integration {
+  id            String            @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider      Provider
+  status        IntegrationStatus @default(NOT_CONNECTED)
+  secrets       String? // AES-256-GCM encrypted JSON — never sent to the browser
+  publicConfig  Json              @default("{}")
+  lastSuccessAt DateTime?
+  lastError     String?
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([workspaceId, provider])
+}
+
+enum CalendarStatus {
+  CONNECTED
+  NEEDS_RECONNECT
+}
+
+model CalendarConnection {
+  id              String         @id @default(cuid())
+  userId          String         @unique
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleEmail     String
+  refreshTokenEnc String
+  accessTokenEnc  String?
+  expiresAt       DateTime?
+  status          CalendarStatus @default(CONNECTED)
+  createdAt       DateTime       @default(now())
+}
+
+enum Direction {
+  IN
+  OUT
+}
+
+enum EventStatus {
+  RECEIVED
+  PROCESSED
+  REJECTED
+  FAILED
+  RETRYING
+  SENT
+}
+
+model IntegrationEvent {
+  id            String      @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  provider      Provider
+  direction     Direction
+  type          String
+  externalId    String? // MessageSid, Stripe event id, ... (dedupe key)
+  status        EventStatus
+  attempts      Int         @default(0)
+  nextAttemptAt DateTime?
+  error         String?
+  payload       Json        @default("{}") // redacted
+  createdAt     DateTime    @default(now())
+
+  @@unique([provider, externalId])
+  @@index([workspaceId, provider, createdAt])
+  @@index([status, nextAttemptAt])
+}
+
+enum MessageStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  READ
+  FAILED
+  RECEIVED
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  contactId     String
+  contact       Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  channel       String    @default("WHATSAPP")
+  assigneeId    String?
+  opportunityId String?
+  lastMessageAt DateTime  @default(now())
+  messages      Message[]
+
+  @@unique([contactId, channel])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  workspaceId    String
+  conversationId String
+  conversation   Conversation  @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      Direction
+  body           String
+  providerSid    String?       @unique
+  status         MessageStatus
+  errorCode      String?
+  errorReason    String?
+  sentById       String?
+  createdAt      DateTime      @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  EXPIRED
+  ABANDONED
+  FAILED
+  REFUNDED
+  PARTIALLY_REFUNDED
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  workspaceId           String
+  workspace             Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  opportunityId         String
+  opportunity           Opportunity   @relation(fields: [opportunityId], references: [id])
+  contactId             String
+  contact               Contact       @relation(fields: [contactId], references: [id])
+  requestedById         String
+  amount                Int // minor units (paisa / cents)
+  currency              String
+  status                PaymentStatus @default(PENDING)
+  refundedAmount        Int           @default(0)
+  stripeSessionId       String        @unique
+  stripePaymentIntentId String?
+  url                   String
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+
+  @@index([workspaceId, status, paidAt])
+}
+
+enum AppointmentStatus {
+  BOOKED
+  RESCHEDULED
+  CANCELLED
+}
+
+model Appointment {
+  id            String            @id @default(cuid())
+  workspaceId   String
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId        String
+  contactId     String
+  contact       Contact           @relation(fields: [contactId], references: [id])
+  opportunityId String?
+  opportunity   Opportunity?      @relation(fields: [opportunityId], references: [id])
+  googleEventId String
+  title         String
+  startUtc      DateTime          @db.Timestamptz(6)
+  endUtc        DateTime          @db.Timestamptz(6)
+  timezone      String // IANA zone of the employee, e.g. Asia/Karachi
+  status        AppointmentStatus @default(BOOKED)
+  createdById   String
+  createdAt     DateTime          @default(now())
+
+  @@index([workspaceId, startUtc])
+}
