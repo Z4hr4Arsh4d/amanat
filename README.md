@@ -50,4 +50,22 @@ _TODO_
 _TODO: how to create the bot, link a user, demo timers._
 
 ### P3 — Twilio, Stripe, Google
-_TODO: sandbox join phrase, Stripe webhook events to enable, Google test users, what each integration can and can't do._
+Credentials are entered per workspace on **/integrations** (Owner/Admin, or anyone with "Connect, change or remove integrations"). They are checked with the provider before saving, stored AES-256-GCM encrypted (`ENCRYPTION_KEY`), and only ever shown masked. Every change is in the audit history.
+
+**Twilio WhatsApp sandbox**
+1. Twilio console → Messaging → Try it out → *Send a WhatsApp message*. Each test phone sends the join phrase (e.g. `join happy-tiger`) to `+1 415 523 8886`.
+2. On /integrations → WhatsApp: paste Account SID + Auth Token, keep `whatsapp:+14155238886`, add the join phrase. Save (we call Twilio to check them).
+3. Copy the **Webhook URL** shown on the card into *Sandbox settings → When a message comes in* (POST). Delivery status callbacks are set automatically per message.
+4. `APP_URL` must be the exact public https URL (ngrok or Railway). Signatures are checked against it, so a wrong `APP_URL` makes every webhook show as *Rejected: Invalid signature* in the sync history.
+
+What happens: a message from an unknown number creates a contact + a WhatsApp lead (and the auto-reply "… will reply within N minutes" if *Auto-reply to customer* is on). A known number attaches to its contact; a new lead is only created if it has no open lead. `STOP` opts the customer out (composer is blocked with the reason), `START` opts back in. Duplicate deliveries are ignored; forged requests get 403 and are logged + audited.
+
+Limits: the sandbox only reaches phones that joined it; free-form replies only within 24h of the customer's last message (error 63016 otherwise, shown in plain words).
+
+**Outbox and retries.** Every outgoing call is an `IntegrationEvent`. Temporary failures (network, timeout, 429, 5xx) retry after 5s, 15s, 45s (4 tries) from the worker (`npm run worker`); permanent ones fail at once with a plain explanation and a Retry button. Safe with two workers running. Sync history: **/integrations/history**.
+
+For P2 (Telegram): call `outbox.send({ workspaceId, provider: "TELEGRAM", type, payload, run })`. For worker retries, also `registerExecutor(type, { run, onResult })` in a module imported by `lib/integrations/executors.ts`; executors must load secrets from the Integration row, never from `payload` (payloads are redacted).
+
+**Stripe (test mode)** — on /integrations → Stripe press *Show webhook URL*, add it in Stripe → Developers → Webhooks with events `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed`, `charge.refunded`, then paste `sk_test_…` and `whsec_…`. Live keys are refused. Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe/<id>`.
+
+**Google Calendar** — set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; redirect URI `{APP_URL}/api/oauth/google/callback`; add every demo Gmail as a test user (testing apps only accept listed users, and tokens may expire after 7 days).
