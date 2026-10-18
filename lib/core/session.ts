@@ -2,13 +2,15 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createHash, randomBytes } from "crypto";
 import { redirect } from "next/navigation";
+import { cache } from "react";
 import type { Level } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { ALL_PERMISSIONS, type Permission } from "@/lib/shared/permissions";
 import { Forbidden, Unauthorized } from "./errors";
 
 export const SESSION_COOKIE = "amanat_session";
-const SESSION_DAYS = 7;
+const SESSION_DAYS = 7; // server-side expiry, slides forward while the user is active
+const COOKIE_DAYS = 30; // browser keeps the cookie longer; the DB row decides if it is still valid
 
 export type Ctx = {
   userId: string;
@@ -20,14 +22,15 @@ export type Ctx = {
   permissions: Set<Permission>;
 };
 
-const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
+export const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
 export async function createSession(userId: string) {
   const token = randomBytes(32).toString("base64url");
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 864e5);
   await prisma.session.create({ data: { userId, tokenHash: sha256(token), expiresAt } });
   (await cookies()).set(SESSION_COOKIE, token, {
-    httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", expires: expiresAt,
+    httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/",
+    expires: new Date(Date.now() + COOKIE_DAYS * 864e5),
   });
 }
 
@@ -42,8 +45,8 @@ export async function destroyAllSessions(userId: string) {
   await prisma.session.deleteMany({ where: { userId } });
 }
 
-/** Returns the logged-in user's context, or null. */
-export async function getCtx(): Promise<Ctx | null> {
+/** Returns the logged-in user's context, or null. Cached per request. */
+export const getCtx = cache(async (): Promise<Ctx | null> => {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
   if (!token) return null;
   const s = await prisma.session.findUnique({
@@ -51,12 +54,16 @@ export async function getCtx(): Promise<Ctx | null> {
     include: { user: { include: { role: true } } },
   });
   if (!s || s.expiresAt < new Date() || !s.user.isActive) return null;
+  // Sliding refresh: an active user stays logged in; 7 days of no use logs them out.
+  if (s.expiresAt.getTime() - Date.now() < (SESSION_DAYS - 1) * 864e5) {
+    await prisma.session.updateMany({ where: { id: s.id }, data: { expiresAt: new Date(Date.now() + SESSION_DAYS * 864e5) } });
+  }
   const u = s.user;
   const permissions = new Set<Permission>(
     u.level === "USER" ? ((u.role?.permissions ?? []) as Permission[]) : ALL_PERMISSIONS,
   );
   return { userId: u.id, workspaceId: u.workspaceId, level: u.level, name: u.name, email: u.email, timezone: u.timezone, permissions };
-}
+});
 
 /** For API routes / server actions: throws 401. */
 export async function requireUser(): Promise<Ctx> {

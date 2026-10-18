@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Toaster } from "sonner";
 import { requireUserPage, can } from "@/lib/core/session";
 import { NAV } from "@/lib/shared/nav";
-import { logoutAction } from "../(auth)/actions";
+import { logoutAction, logoutAllAction } from "../(auth)/actions";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const ctx = await requireUserPage();
@@ -33,7 +33,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <p className="font-medium">{ctx.name}</p>
           <p className="text-stone-600">{ctx.level}</p>
           <form action={logoutAction}>
-            <button className="mt-2 underline">Log out</button>
+            <button className="mt-2 underline focus:outline-none focus:ring-2 focus:ring-emerald-700">Log out</button>
+          </form>
+          <form action={logoutAllAction}>
+            <button className="mt-1 text-stone-600 underline focus:outline-none focus:ring-2 focus:ring-emerald-700">Log out of all devices</button>
           </form>
         </div>
       </nav>

@@ -3,7 +3,7 @@
 // Also bounces logged-out visitors to /login (the real check is still on the server).
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/login", "/signup", "/f/", "/api/webhooks/", "/api/oauth/", "/_next", "/favicon"];
+const PUBLIC = ["/login", "/signup", "/invite/", "/f/", "/api/webhooks/", "/api/oauth/", "/_next", "/favicon"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
