@@ -1,5 +1,7 @@
-import { Placeholder } from "@/components/Placeholder";
+import { requireUserPage, can } from "@/lib/core/session";
+import { RecoveryClient } from "./RecoveryClient";
 
-export default function Page() {
-  return <Placeholder title="Recovery queue" owner="P2" reqs="F3.7" />;
+export default async function Page() {
+  const ctx = await requireUserPage();
+  return <RecoveryClient canReassign={can(ctx, "leads.reassign")} />;
 }
