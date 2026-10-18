@@ -1,5 +1,7 @@
-import { Placeholder } from "@/components/Placeholder";
+import { requireUserPage } from "@/lib/core/session";
+import { ListsClient } from "./ListsClient";
 
-export default function Page() {
-  return <Placeholder title="Saved lists" owner="P2" reqs="F2.6" />;
+export default async function Page() {
+  await requireUserPage();
+  return <ListsClient />;
 }

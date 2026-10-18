@@ -16,3 +16,4 @@ export * as payments from "@/lib/integrations/payments"; // P3: payments.collect
 export * as messaging from "@/lib/integrations/messaging"; // P3: messaging.send(), messaging.notifyHandoff()
 export * as outbox from "@/lib/integrations/outbox"; // P3: outbox.send()
 export * as secrets from "@/lib/integrations/secrets"; // P3: encrypt/decrypt/mask
+export * as filters from "@/lib/filters"; // P2: filters.buildWhere(entity, filters, {userId, canSeeValues}), filters.parseFilterParam(searchParams.f)
