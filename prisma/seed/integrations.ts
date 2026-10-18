@@ -1,6 +1,6 @@
 // P3 owns. Sample WhatsApp conversations and sync history so the Inbox and Integrations pages
 // have something to show on a fresh install. Real credentials are entered on /integrations.
-// TODO §4.3/§4.4: payments (paid, pending, refunded) and appointments.
+// TODO §4.4: appointments.
 import type { PrismaClient } from "@prisma/client";
 
 const ago = (min: number) => new Date(Date.now() - min * 60_000);
@@ -72,6 +72,31 @@ export async function seedIntegrations(prisma: PrismaClient, workspaceId: string
       });
     }
   }
+  // Sample opportunities (if P1's seed made none) and payments: paid, pending, partly refunded, abandoned.
+  const pipeline = await prisma.pipeline.findFirst({ where: { workspaceId }, orderBy: { isDefault: "desc" }, include: { stages: { orderBy: { order: "asc" } } } });
+  const open = pipeline?.stages.find((st) => st.kind === "OPEN");
+  const ahmed = await prisma.contact.findFirst({ where: { workspaceId, phone: "+923005550001" } });
+  if (pipeline && open && ahmed && hina) {
+    const opp = await prisma.opportunity.create({ data: { workspaceId, pipelineId: pipeline.id, stageId: open.id, contactId: ahmed.id, ownerId: hina.id, title: "5kW rooftop solar", value: 450000, currency: "PKR" } });
+    const pays = [
+      { amount: 5000000, status: "PAID", paidAt: ago(60 * 24), refundedAmount: 0 },
+      { amount: 2000000, status: "PARTIALLY_REFUNDED", paidAt: ago(60 * 48), refundedAmount: 500000 },
+      { amount: 1500000, status: "PENDING", paidAt: null, refundedAmount: 0 },
+      { amount: 1000000, status: "ABANDONED", paidAt: null, refundedAmount: 0 },
+    ] as const;
+    for (const [n, p] of pays.entries()) {
+      const tag = `${workspaceId.slice(-6)}${n}`;
+      await prisma.payment.create({
+        data: {
+          workspaceId, opportunityId: opp.id, contactId: ahmed.id, requestedById: hina.id, amount: p.amount, currency: "PKR",
+          status: p.status, refundedAmount: p.refundedAmount, paidAt: p.paidAt, createdAt: ago(60 * 24 * 3 - n),
+          stripeSessionId: `cs_test_seed${tag}`, stripePaymentIntentId: p.paidAt ? `pi_seed${tag}` : null,
+          url: "https://checkout.stripe.com/c/pay/cs_test_seed_example",
+        },
+      });
+    }
+  }
+
   // A forged webhook, to show what a rejected request looks like in the history.
   await prisma.integrationEvent.create({
     data: { workspaceId, provider: "TWILIO", direction: "IN", type: "message.inbound", status: "REJECTED", createdAt: ago(20),

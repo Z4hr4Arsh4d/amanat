@@ -83,6 +83,22 @@ Replies sent from the Inbox fail with the fake credentials; that shows the retry
 
 For P2 (Telegram): call `outbox.send({ workspaceId, provider: "TELEGRAM", type, payload, run })`. For worker retries, also `registerExecutor(type, { run, onResult })` in a module imported by `lib/integrations/executors.ts`; executors must load secrets from the Integration row, never from `payload` (payloads are redacted).
 
-**Stripe (test mode)** — on /integrations → Stripe press *Show webhook URL*, add it in Stripe → Developers → Webhooks with events `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_failed`, `payment_intent.payment_failed`, `charge.refunded`, then paste `sk_test_…` and `whsec_…`. Live keys are refused. Locally: `stripe listen --forward-to localhost:3000/api/webhooks/stripe/<id>`.
+**Stripe (test mode, free)** — Stripe doesn't list Pakistan as a supported country, but test mode works for any account: sign up (choose e.g. United States), stay in **Test mode**, no verification needed.
+1. On /integrations → Stripe press *Show webhook URL*; add it in Stripe → Developers → Webhooks with events `checkout.session.completed`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `checkout.session.expired`, `payment_intent.payment_failed`, `charge.refunded`. Copy its signing secret `whsec_…`.
+2. Paste `sk_test_…` (Developers → API keys) and `whsec_…` on the Stripe card. Live keys are refused.
+3. /payments → *Request a payment* (or the slot on an opportunity page) → *Copy link* / *Send on WhatsApp*. Pay with card 4242 4242 4242 4242. It turns **Paid** live when the webhook arrives; refund in the Stripe dashboard → **Refunded** / **Partly refunded**.
+4. Locally without a public URL: `stripe listen --forward-to localhost:3000/api/webhooks/stripe/<integrationId>` and use the `whsec_` it prints.
+
+Rules: the signature is checked on the raw body before anything changes; each event id is processed once; statuses never move backwards (a late "expired" can't undo "paid"); unpaid links older than `ABANDON_SECONDS` become **Abandoned** (worker job) and still turn Paid if paid later. *Collected* = paid minus refunds (PKR); *Projected* = open opportunity values + unpaid links on non-open opportunities. Amanat never sees card details.
+
+**Testing payments without a Stripe account** (dev only):
+```bash
+npx tsx --env-file=.env lib/integrations/dev/simulate-stripe.ts setup      # fake Stripe + 2 sample opportunities if none exist
+# create a link on /payments, then:
+npx tsx --env-file=.env lib/integrations/dev/simulate-stripe.ts pay        # latest payment → Paid
+npx tsx --env-file=.env lib/integrations/dev/simulate-stripe.ts duplicate  # same event again → recorded once
+npx tsx --env-file=.env lib/integrations/dev/simulate-stripe.ts refund latest 10000   # partial refund (omit amount for full)
+npx tsx --env-file=.env lib/integrations/dev/simulate-stripe.ts fail | expire | forged
+```
 
 **Google Calendar** — set `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`; redirect URI `{APP_URL}/api/oauth/google/callback`; add every demo Gmail as a test user (testing apps only accept listed users, and tokens may expire after 7 days).
