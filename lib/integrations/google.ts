@@ -22,9 +22,17 @@ const SCOPES = ["openid", "email", "https://www.googleapis.com/auth/calendar.eve
 const SIM = "SIMULATED-DEMO-CALENDAR";
 
 export const redirectUri = () => `${appUrl()}/api/oauth/google/callback`;
-export function googleConfigured() {
+
+/** Env value without stray spaces or quotes (easy to paste by mistake into hosting dashboards). */
+function cleanEnv(name: string) {
   ensureEnv();
-  return !!process.env.GOOGLE_CLIENT_ID && !!process.env.GOOGLE_CLIENT_SECRET;
+  return (process.env[name] ?? "").trim().replace(/^["']+|["']+$/g, "").trim();
+}
+const clientId = () => cleanEnv("GOOGLE_CLIENT_ID");
+const clientSecret = () => cleanEnv("GOOGLE_CLIENT_SECRET");
+
+export function googleConfigured() {
+  return !!clientId() && !!clientSecret();
 }
 /** Demo calendars are allowed only when DEMO_MODE=true (hackathon demo / local testing). */
 export function demoMode() {
@@ -68,7 +76,7 @@ export function readState(state: string | null, cookieNonce: string | undefined)
 
 export function authUrl(state: string) {
   const q = new URLSearchParams({
-    client_id: process.env.GOOGLE_CLIENT_ID ?? "", redirect_uri: redirectUri(), response_type: "code", scope: SCOPES.join(" "),
+    client_id: clientId(), redirect_uri: redirectUri(), response_type: "code", scope: SCOPES.join(" "),
     access_type: "offline", prompt: "consent", include_granted_scopes: "true", state,
   });
   return `${AUTH}?${q}`;
@@ -104,7 +112,7 @@ async function call<T>(url: string, init: { method?: string; token?: string; jso
 /** Callback step: code → tokens + the Google account's email. */
 export async function exchangeCode(code: string) {
   const t = await call<{ access_token: string; refresh_token?: string; expires_in: number }>(TOKEN, {
-    form: { code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: redirectUri(), grant_type: "authorization_code" },
+    form: { code, client_id: clientId(), client_secret: clientSecret(), redirect_uri: redirectUri(), grant_type: "authorization_code" },
   });
   const me = await call<{ email?: string }>(USERINFO, { token: t.access_token });
   return { ...t, email: me.email ?? "unknown" };
@@ -124,7 +132,7 @@ async function accessToken(conn: CalendarConnection): Promise<string> {
   if (conn.accessTokenEnc && conn.expiresAt && conn.expiresAt.getTime() > Date.now() + 60_000) return decrypt(conn.accessTokenEnc);
   try {
     const t = await call<{ access_token: string; expires_in: number }>(TOKEN, {
-      form: { client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", refresh_token: decrypt(conn.refreshTokenEnc), grant_type: "refresh_token" },
+      form: { client_id: clientId(), client_secret: clientSecret(), refresh_token: decrypt(conn.refreshTokenEnc), grant_type: "refresh_token" },
     });
     await prisma.calendarConnection.update({ where: { id: conn.id }, data: { accessTokenEnc: encrypt(t.access_token), expiresAt: new Date(Date.now() + t.expires_in * 1000) } });
     return t.access_token;
