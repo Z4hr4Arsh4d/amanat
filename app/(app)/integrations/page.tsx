@@ -188,6 +188,18 @@ export default async function IntegrationsPage() {
         </div>
       </header>
 
+      <details className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950" open>
+        <summary className="cursor-pointer font-semibold">Try everything in 5 minutes</summary>
+        <ol className="mt-2 list-decimal space-y-1 pl-5">
+          <li><strong>Customer chat:</strong> open the <a className="underline" href={chatUrl} target="_blank" rel="noreferrer">customer chat</a> in a new tab, type a name, phone and message. A lead is created and the customer gets an automatic reply.</li>
+          <li><strong>Reply:</strong> open the <Link className="underline" href="/inbox">Inbox</Link>, pick the chat and answer. The reply shows up in the customer&apos;s tab within seconds.</li>
+          <li><strong>Escalation:</strong> start a chat and do not answer. After the wait time set in Assignment rules the lead moves to the next person and the customer is told who took over (the worker must be running).</li>
+          <li><strong>Payment:</strong> open an opportunity, press <em>Create payment link</em> (needs Stripe below), pay with card 4242 4242 4242 4242 and watch it turn Paid on <Link className="underline" href="/payments">Payments</Link>.</li>
+          <li><strong>Appointment:</strong> on <Link className="underline" href="/settings/calendar">My calendar</Link> connect Google (or the demo calendar) and press <em>Check now</em>, then book from an opportunity page.</li>
+          <li><strong>Proof:</strong> <Link className="underline" href="/integrations/history">Sync history</Link> lists every message, payment event and calendar call{faultLabAllowed(ctx) ? <>, and the <Link className="underline" href="/integrations/fault-lab">Fault lab</Link> shows duplicates, forged requests and outages being handled</> : ""}.</li>
+        </ol>
+      </details>
+
       {localUrl && canManage && (
         <p role="note" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           <span aria-hidden="true">⚠ </span>APP_URL is <code>{base}</code>. Twilio and Stripe cannot reach a localhost address.

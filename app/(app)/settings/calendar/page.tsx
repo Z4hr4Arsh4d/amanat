@@ -5,6 +5,8 @@ import { Chip } from "@/lib/integrations/ui/StatusChip";
 import { TimeAgo } from "@/lib/integrations/ui/TimeAgo";
 import { offsetLabel } from "@/lib/integrations/time";
 import { CalendarButtons } from "./CalendarButtons";
+import { CalendarCheck } from "./CalendarCheck";
+import { MyAppointments } from "./MyAppointments";
 
 export const dynamic = "force-dynamic";
 
@@ -42,6 +44,14 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         )}
         <p className="text-sm"><span className="text-stone-600">Your time zone: </span>{me.timezone} ({offsetLabel(me.timezone)}). Appointments with you are booked in this zone.</p>
         <CalendarButtons connected={!!c} needsReconnect={c?.status === "NEEDS_RECONNECT"} googleReady={me.googleReady} demoAllowed={me.demoAllowed} />
+      </section>
+
+      <CalendarCheck connected={!!c && c.status === "CONNECTED"} />
+
+      <section aria-labelledby="mine" className="space-y-2">
+        <h2 id="mine" className="text-lg font-semibold">My upcoming appointments</h2>
+        <p className="text-sm text-stone-600">Customer appointments booked with you in Amanat. They are also on your Google Calendar.</p>
+        <MyAppointments />
       </section>
 
       <section className="rounded-lg border border-stone-200 bg-stone-50 p-4 text-sm text-stone-700">

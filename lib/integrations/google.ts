@@ -235,3 +235,83 @@ export async function revoke(conn: CalendarConnection) {
   if (isDemoConnection(conn)) return;
   try { await call(REVOKE, { form: { token: decrypt(conn.refreshTokenEnc) } }); } catch { /* already revoked: fine */ }
 }
+
+// ─────────────── Diagnostics: "Check my calendar" (what works, what to fix) ───────────────
+
+/** Link that opens one event in Google Calendar (the primary calendar's id is the account's email). */
+export function eventLink(eventId: string, accountEmail: string) {
+  if (eventId.startsWith("demo_") || eventId === "pending" || !accountEmail.includes("@") || accountEmail.includes("(demo")) return null;
+  return `https://calendar.google.com/calendar/event?eid=${Buffer.from(`${eventId} ${accountEmail}`).toString("base64").replace(/=+$/, "")}`;
+}
+
+export type CheckStep = { label: string; ok: boolean; detail: string };
+export type CheckEvent = { title: string; start: string; end: string; link: string | null; allDay: boolean };
+
+/** Friendly explanation for a failed Google call during the check. */
+function explainGoogle(e: unknown, what: string) {
+  if (e instanceof ReconnectNeeded) return "Your Google connection expired or was revoked. Press “Reconnect Google Calendar” below.";
+  const err = e as { status?: number; code?: string; message?: string };
+  if (err.status === 403 && /not been used|disabled|accessNotConfigured/i.test(err.message ?? ""))
+    return "The Google Calendar API is switched off in the Google Cloud project. Open console.cloud.google.com → APIs & Services → Library → Google Calendar API → Enable.";
+  if (err.status === 403) return `Google did not give Amanat permission to ${what}. Press “Reconnect Google Calendar” and tick every box on Google's permission screen.`;
+  if (err.status === 401) return "Google rejected the saved access. Press “Reconnect Google Calendar”.";
+  return classify("GOOGLE", e).message;
+}
+
+export async function diagnose(userId: string): Promise<{ steps: CheckStep[]; events: CheckEvent[]; account: string | null }> {
+  const steps: CheckStep[] = [];
+  const events: CheckEvent[] = [];
+  const conn = await prisma.calendarConnection.findUnique({ where: { userId } });
+  if (!conn) return { steps: [{ label: "Calendar connected", ok: false, detail: "Not connected yet. Press “Connect Google Calendar” (or use the demo calendar)." }], events, account: null };
+  steps.push({ label: "Calendar connected", ok: conn.status === "CONNECTED", detail: conn.status === "CONNECTED" ? `Connected as ${conn.googleEmail}.` : "The connection expired. Press “Reconnect Google Calendar”." });
+  if (conn.status !== "CONNECTED") return { steps, events, account: conn.googleEmail };
+
+  const now = new Date();
+  const week = new Date(now.getTime() + 7 * 864e5);
+  if (isDemoConnection(conn)) {
+    steps.push({ label: "Demo calendar", ok: true, detail: "This is a demo calendar (no Google). Busy times come from your appointments booked in Amanat." });
+    const rows = await prisma.appointment.findMany({ where: { userId, status: { in: ["BOOKED", "RESCHEDULED"] }, endUtc: { gt: now }, startUtc: { lt: week } }, orderBy: { startUtc: "asc" }, take: 10 });
+    rows.forEach((a) => events.push({ title: a.title, start: a.startUtc.toISOString(), end: a.endUtc.toISOString(), link: null, allDay: false }));
+    return { steps, events, account: conn.googleEmail };
+  }
+
+  let token: string;
+  try {
+    token = await accessToken(conn);
+    steps.push({ label: "Sign-in with Google", ok: true, detail: "Google accepted the saved access." });
+  } catch (e) {
+    steps.push({ label: "Sign-in with Google", ok: false, detail: explainGoogle(e, "use your calendar") });
+    return { steps, events, account: conn.googleEmail };
+  }
+  try {
+    await call(`${CAL}/freeBusy`, { token, json: { timeMin: now.toISOString(), timeMax: new Date(now.getTime() + 3600_000).toISOString(), items: [{ id: "primary" }] } });
+    steps.push({ label: "Read busy times", ok: true, detail: "Amanat can see when you are busy (used to warn about clashes)." });
+  } catch (e) {
+    steps.push({ label: "Read busy times", ok: false, detail: explainGoogle(e, "read your busy times") });
+  }
+  try {
+    const q = new URLSearchParams({ timeMin: now.toISOString(), timeMax: week.toISOString(), singleEvents: "true", orderBy: "startTime", maxResults: "10" });
+    const r = await call<{ items?: { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string }; htmlLink?: string }[] }>(`${CAL}/calendars/primary/events?${q}`, { token });
+    for (const ev of r.items ?? []) {
+      const start = ev.start?.dateTime ?? ev.start?.date;
+      const end = ev.end?.dateTime ?? ev.end?.date;
+      if (start && end) events.push({ title: ev.summary ?? "(no title)", start, end, link: ev.htmlLink ?? null, allDay: !ev.start?.dateTime });
+    }
+    steps.push({ label: "Read your events", ok: true, detail: events.length ? `Found ${events.length} event${events.length > 1 ? "s" : ""} in the next 7 days (listed below).` : "Connected, and there are no events in the next 7 days." });
+  } catch (e) {
+    steps.push({ label: "Read your events", ok: false, detail: explainGoogle(e, "read your events") });
+  }
+  return { steps, events, account: conn.googleEmail };
+}
+
+/** Adds a clearly named test event one hour from now, so the user can see it appear in Google Calendar. */
+export async function addTestEvent(userId: string) {
+  const start = new Date(Date.now() + 3600_000);
+  start.setSeconds(0, 0);
+  const end = new Date(start.getTime() + 15 * 60_000);
+  const u = await owner(userId);
+  const conn = await prisma.calendarConnection.findUnique({ where: { userId } });
+  const tz = u?.timezone ?? "UTC";
+  const id = await insertEvent(userId, { summary: "Amanat test event (you can delete this)", description: "Created by the “Add a test event” button in Amanat.", start, end, timeZone: tz });
+  return { start, end, link: conn ? eventLink(id, conn.googleEmail) : null, demo: !!conn && isDemoConnection(conn) };
+}
