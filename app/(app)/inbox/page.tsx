@@ -4,6 +4,9 @@ import { prisma } from "@/lib/db";
 import { seesAll } from "@/lib/integrations/inbox";
 import { appUrl } from "@/lib/integrations/store";
 import { InboxClient } from "./InboxClient";
+import { PageHeader } from "@/components/ui/Kit";
+import { Icon } from "@/components/ui/Icon";
+import { ui } from "@/components/ui/styles";
 
 export const dynamic = "force-dynamic";
 
@@ -13,21 +16,18 @@ export default async function InboxPage({ searchParams }: { searchParams: Promis
   const ws = await prisma.workspace.findUnique({ where: { id: ctx.workspaceId }, select: { slug: true } });
   const chatUrl = `${appUrl()}/api/webhooks/webchat/${ws?.slug ?? ""}`;
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Inbox</h1>
-          <p className="text-sm text-stone-600">
-            {seesAll(ctx)
-              ? "All customer conversations in this workspace (website chat and WhatsApp)."
-              : "Customer conversations you handle: ones assigned to you, your contacts, and your leads."}
-          </p>
-        </div>
-        <a href={chatUrl} target="_blank" rel="noreferrer"
-          className="rounded border border-emerald-700 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900 hover:bg-emerald-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
-          Try it: open the customer chat in a new tab
-        </a>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Inbox"
+        description={seesAll(ctx)
+          ? "All customer conversations in this workspace (website chat and WhatsApp)."
+          : "Customer conversations you handle: ones assigned to you, your contacts, and your leads."}
+        actions={
+          <a href={chatUrl} target="_blank" rel="noreferrer" className={ui.btn}>
+            <Icon name="external" className="h-4 w-4" /> Try it: open the customer chat
+          </a>
+        }
+      />
       <InboxClient initialId={c ?? null} />
     </div>
   );

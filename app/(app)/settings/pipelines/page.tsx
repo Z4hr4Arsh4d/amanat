@@ -2,7 +2,7 @@
 import { requireUserPage, can } from "@/lib/core/session";
 import { scoped } from "@/lib/core/scoped";
 import { NoAccess } from "@/components/ui/NoAccess";
-import { ui } from "@/components/ui/styles";
+import { PageHeader } from "@/components/ui/Kit";
 import { allOpportunityFields, pipelinesWithStages } from "@/lib/crm/pipelines";
 import { PipelinesClient } from "./PipelinesClient";
 
@@ -18,13 +18,7 @@ export default async function PipelinesPage() {
   const byStage = Object.fromEntries(counts.map((c) => [c.stageId, c._count._all]));
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className={ui.h1}>Pipelines</h1>
-        <p className={ui.muted}>
-          Stages run top to bottom. Mark the stages that close a deal as Won or Lost. Tick the fields that must be filled before
-          an opportunity can enter a stage.
-        </p>
-      </div>
+      <PageHeader title="Pipelines" description="Stages run top to bottom. Mark the stages that close a deal as Won or Lost. Tick the fields that must be filled before an opportunity can enter a stage." />
       <PipelinesClient pipelines={pipelines} fields={fields} counts={byStage} />
     </section>
   );

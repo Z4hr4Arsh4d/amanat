@@ -1,22 +1,14 @@
-// P3 owns. Status chips always carry text + an icon, never color alone (Q8).
-const STYLES = {
-  ok: "border-emerald-300 bg-emerald-50 text-emerald-900",
-  warn: "border-amber-300 bg-amber-50 text-amber-900",
-  bad: "border-red-300 bg-red-50 text-red-900",
-  off: "border-stone-300 bg-stone-100 text-stone-700",
-  info: "border-sky-300 bg-sky-50 text-sky-900",
-} as const;
-const ICONS = { ok: "✓", warn: "⏳", bad: "⚠", off: "○", info: "•" } as const;
+// P3 owns. Status chips always carry text + an icon, never color alone (Q8). Drawn with the shared Badge.
+import { Badge, type Tone as BadgeTone } from "@/components/ui/Kit";
+import type { IconName } from "@/components/ui/Icon";
 
-export type Tone = keyof typeof STYLES;
+const TONES = { ok: "ok", warn: "warn", bad: "bad", off: "neutral", info: "info" } as const satisfies Record<string, BadgeTone>;
+const ICONS: Record<keyof typeof TONES, IconName> = { ok: "check", warn: "clock", bad: "alert", off: "circle", info: "dot" };
+
+export type Tone = keyof typeof TONES;
 
 export function Chip({ tone, children, title }: { tone: Tone; children: React.ReactNode; title?: string }) {
-  return (
-    <span title={title} className={`inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${STYLES[tone]}`}>
-      <span aria-hidden="true">{ICONS[tone]}</span>
-      {children}
-    </span>
-  );
+  return <Badge tone={TONES[tone]} icon={ICONS[tone]} title={title}>{children}</Badge>;
 }
 
 export function IntegrationStatusChip({ status }: { status: "NOT_CONNECTED" | "CONNECTED" | "ERROR" }) {

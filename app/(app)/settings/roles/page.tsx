@@ -2,7 +2,7 @@
 import { requireUserPage, can } from "@/lib/core/session";
 import { scoped } from "@/lib/core/scoped";
 import { NoAccess } from "@/components/ui/NoAccess";
-import { ui } from "@/components/ui/styles";
+import { PageHeader } from "@/components/ui/Kit";
 import { PERMISSIONS } from "@/lib/shared/permissions";
 import { RolesClient } from "./RolesClient";
 
@@ -16,12 +16,7 @@ export default async function RolesPage() {
   const perms = Object.entries(PERMISSIONS).map(([key, label]) => ({ key, label }));
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className={ui.h1}>Roles</h1>
-        <p className={ui.muted}>
-          A role decides what a User can do. Owners and Admins always have every permission.
-        </p>
-      </div>
+      <PageHeader title="Roles" description="A role decides what a User can do. Owners and Admins always have every permission." />
       <RolesClient roles={roles.map((r) => ({ id: r.id, name: r.name, permissions: r.permissions, users: r._count.users }))} perms={perms} />
     </section>
   );

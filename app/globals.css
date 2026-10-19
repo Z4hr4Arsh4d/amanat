@@ -1,4 +1,85 @@
 @import "tailwindcss";
 
-:root { color-scheme: light; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+/*
+  Amanat design tokens.
+  The app's classes use the `stone` (neutrals) and `emerald` (brand) scales everywhere, so the look is set here:
+  `stone` is a calm, slightly cool grey and `emerald` is the deep pine brand colour. Change a value here and every
+  page follows. Status colours (red, amber, sky) keep Tailwind's defaults.
+*/
+@theme {
+  --font-sans: var(--font-manrope), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --color-stone-50: #f7f8f7;
+  --color-stone-100: #eff1f0;
+  --color-stone-200: #e2e6e4;
+  --color-stone-300: #cbd1ce;
+  --color-stone-400: #98a19d;
+  --color-stone-500: #67716c;
+  --color-stone-600: #505955;
+  --color-stone-700: #3c4440;
+  --color-stone-800: #29302d;
+  --color-stone-900: #181d1b;
+  --color-stone-950: #0d1110;
+
+  --color-emerald-50: #eff9f5;
+  --color-emerald-100: #d7f0e6;
+  --color-emerald-200: #b0e0cd;
+  --color-emerald-300: #7cc8ae;
+  --color-emerald-400: #47ab8d;
+  --color-emerald-500: #258f72;
+  --color-emerald-600: #17755d;
+  --color-emerald-700: #12604e;
+  --color-emerald-800: #104e41;
+  --color-emerald-900: #0d3f35;
+  --color-emerald-950: #06241e;
+
+  --shadow-xs: 0 1px 2px 0 rgb(16 24 20 / 0.05);
+  --shadow-sm: 0 1px 2px 0 rgb(16 24 20 / 0.04), 0 1px 3px 0 rgb(16 24 20 / 0.06);
+  --shadow-md: 0 2px 4px -1px rgb(16 24 20 / 0.06), 0 6px 12px -2px rgb(16 24 20 / 0.08);
+  --shadow-lg: 0 4px 6px -2px rgb(16 24 20 / 0.05), 0 16px 32px -6px rgb(16 24 20 / 0.14);
+
+  --animate-fade-in: fade-in 160ms ease-out;
+  @keyframes fade-in {
+    from { opacity: 0; transform: translateY(-2px); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+@layer base {
+  :root { color-scheme: light; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-stone-50 font-sans text-stone-900;
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+  }
+  ::selection { background: var(--color-emerald-200); color: var(--color-emerald-950); }
+  input, select, textarea, button { font: inherit; }
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--color-emerald-700); }
+  :where(a, button, summary, [tabindex]):focus-visible { outline: 2px solid var(--color-emerald-600); outline-offset: 2px; }
+  :where(a, button, summary):focus:not(:focus-visible) { outline: none; }
+  summary { cursor: pointer; }
+  summary::-webkit-details-marker { display: none; }
+  code { @apply rounded bg-stone-100 px-1 py-0.5 font-mono text-[0.85em] text-stone-800; }
+  ::placeholder { color: var(--color-stone-400); opacity: 1; }
+  [disabled] { cursor: not-allowed; }
+}
+
+/* Native selects get one consistent chevron (unlayered so it wins over padding utilities). */
+select:not([multiple]) {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%2367716c' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.6rem center;
+  background-size: 1rem;
+  padding-right: 2.1rem;
+}
+
+/* A <details> whose summary shows a chevron that turns when open. */
+details[open] > summary .chevron { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}

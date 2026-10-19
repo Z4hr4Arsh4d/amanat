@@ -2,7 +2,7 @@
 import { requireUserPage, can } from "@/lib/core/session";
 import { scoped } from "@/lib/core/scoped";
 import { NoAccess } from "@/components/ui/NoAccess";
-import { ui } from "@/components/ui/styles";
+import { PageHeader } from "@/components/ui/Kit";
 import { UsersClient } from "./UsersClient";
 
 export default async function UsersPage() {
@@ -23,10 +23,7 @@ export default async function UsersPage() {
   ]);
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className={ui.h1}>Users</h1>
-        <p className={ui.muted}>Invite people, set their level and role, and set who is available for leads.</p>
-      </div>
+      <PageHeader title="Users" description="Invite people, set their level and role, and set who is available for leads." />
       <UsersClient me={{ id: ctx.userId, level: ctx.level }} users={users} roles={roles} invites={invites} />
     </section>
   );

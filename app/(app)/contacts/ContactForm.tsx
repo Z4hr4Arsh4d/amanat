@@ -47,35 +47,35 @@ export function ContactForm({ initial, defs, companies, team, onDone }: {
   }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1">
+    <form onSubmit={submit} className="space-y-5">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className={ui.field}>
           <label htmlFor={`${pre}-name`} className={ui.label}>Name</label>
-          <input id={`${pre}-name`} required value={v.name} onChange={set("name")} className={ui.input} autoComplete="off" />
+          <input id={`${pre}-name`} required value={v.name} onChange={set("name")} placeholder="e.g. Ahmed Raza" className={ui.input} autoComplete="off" />
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor={`${pre}-phone`} className={ui.label}>Phone (WhatsApp)</label>
-          <input id={`${pre}-phone`} value={v.phone} onChange={set("phone")} placeholder="0300 1234567 or +92 300 1234567" className={ui.input} inputMode="tel" />
+          <input id={`${pre}-phone`} value={v.phone} onChange={set("phone")} placeholder="0300 1234567 or +92 300 1234567" className={ui.input} inputMode="tel" type="tel" />
         </div>
-        <div className="space-y-1">
-          <label htmlFor={`${pre}-email`} className={ui.label}>Email</label>
-          <input id={`${pre}-email`} type="email" value={v.email} onChange={set("email")} className={ui.input} />
+        <div className={ui.field}>
+          <label htmlFor={`${pre}-email`} className={ui.label}>Email <span className="font-normal text-stone-500">(optional)</span></label>
+          <input id={`${pre}-email`} type="email" value={v.email} onChange={set("email")} placeholder="name@example.com" className={ui.input} />
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor={`${pre}-company`} className={ui.label}>Company</label>
           <select id={`${pre}-company`} value={v.companyId} onChange={set("companyId")} className={ui.input}>
             <option value="">— No company —</option>
             {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor={`${pre}-owner`} className={ui.label}>Owner</label>
           <select id={`${pre}-owner`} value={v.ownerId} onChange={set("ownerId")} className={ui.input}>
             <option value="">{editing ? "— Nobody —" : "— Me —"}</option>
             {team.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor={`${pre}-tags`} className={ui.label}>Tags (comma separated)</label>
           <input id={`${pre}-tags`} value={v.tags} onChange={set("tags")} placeholder="vip, rooftop" className={ui.input} />
         </div>
@@ -86,8 +86,8 @@ export function ContactForm({ initial, defs, companies, team, onDone }: {
         onChange={(k, val) => setV((p) => ({ ...p, customFields: { ...p.customFields, [k]: val } }))}
         idPrefix={pre}
       />
-      <div className="flex gap-2">
-        <button disabled={pending} className={ui.btnPrimary}>{pending && <Spinner />} {editing ? "Save contact" : "Create contact"}</button>
+      <div className="flex flex-wrap gap-2 border-t border-stone-100 pt-4">
+        <button disabled={pending} className={ui.btnPrimary}>{pending && <Spinner />}{pending ? "Saving…" : editing ? "Save contact" : "Create contact"}</button>
         {onDone && <button type="button" className={ui.btn} onClick={onDone}>Cancel</button>}
       </div>
     </form>

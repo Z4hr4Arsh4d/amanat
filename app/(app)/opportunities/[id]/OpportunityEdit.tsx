@@ -6,6 +6,7 @@ import { useAction } from "@/components/ui/useAction";
 import { Spinner } from "@/components/ui/Spinner";
 import { DynamicFields, type FieldDefView } from "@/components/ui/DynamicFields";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
 import { deleteOpportunity, updateOpportunity } from "../actions";
 
 type Opt = { id: string; name: string };
@@ -25,9 +26,9 @@ export function OpportunityEdit({ initial, defs, required, team, canEdit, canDel
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
       <div className="flex flex-wrap gap-2">
-        {canEdit && !editing && <button type="button" className={ui.btn} onClick={open}>✎ Edit opportunity</button>}
+        {canEdit && !editing && <button type="button" className={ui.btn} onClick={open}><Icon name="pencil" className="h-4 w-4" />Edit opportunity</button>}
         {canDelete && (
           <button
             type="button"
@@ -41,13 +42,13 @@ export function OpportunityEdit({ initial, defs, required, team, canEdit, canDel
               });
             }}
           >
-            Delete
+            {pending ? <Spinner /> : <Icon name="trash" className="h-4 w-4" />}Delete
           </button>
         )}
       </div>
       {editing && (
         <form
-          className={`${ui.card} space-y-3`}
+          className="animate-fade-in space-y-5 rounded-xl border border-stone-200 bg-stone-50/60 p-4 sm:p-5"
           onSubmit={(e) => {
             e.preventDefault();
             run(
@@ -59,12 +60,12 @@ export function OpportunityEdit({ initial, defs, required, team, canEdit, canDel
             );
           }}
         >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1 sm:col-span-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className={`${ui.field} sm:col-span-2`}>
               <label htmlFor="oe-title" className={ui.label}>Title</label>
               <input id="oe-title" required value={v.title} onChange={(e) => setV({ ...v, title: e.target.value })} className={ui.input} />
             </div>
-            <div className="space-y-1">
+            <div className={ui.field}>
               <label htmlFor="oe-value" className={ui.label}>Value</label>
               {v.valueMasked ? (
                 <p id="oe-value" className="py-2 text-sm text-stone-600">••••• (hidden for your role)</p>
@@ -72,14 +73,14 @@ export function OpportunityEdit({ initial, defs, required, team, canEdit, canDel
                 <input id="oe-value" type="number" min="0" step="any" value={v.value ?? 0} onChange={(e) => setV({ ...v, value: e.target.value === "" ? 0 : Number(e.target.value) })} className={ui.input} />
               )}
             </div>
-            <div className="space-y-1">
+            <div className={ui.field}>
               <label htmlFor="oe-currency" className={ui.label}>Currency</label>
               <select id="oe-currency" value={v.currency} onChange={(e) => setV({ ...v, currency: e.target.value })} className={ui.input}>
                 <option value="PKR">PKR</option>
                 <option value="USD">USD</option>
               </select>
             </div>
-            <div className="space-y-1">
+            <div className={ui.field}>
               <label htmlFor="oe-owner" className={ui.label}>Owner</label>
               <select id="oe-owner" value={v.ownerId} onChange={(e) => setV({ ...v, ownerId: e.target.value })} className={ui.input}>
                 <option value="">— Nobody —</option>
@@ -95,7 +96,7 @@ export function OpportunityEdit({ initial, defs, required, team, canEdit, canDel
             required={required}
           />
           <div className="flex gap-2">
-            <button disabled={pending} className={ui.btnPrimary}>{pending && <Spinner />} Save</button>
+            <button disabled={pending} className={ui.btnPrimary}>{pending && <Spinner />}{pending ? "Saving…" : "Save"}</button>
             <button type="button" className={ui.btn} onClick={() => setEditing(false)}>Cancel</button>
           </div>
         </form>

@@ -8,6 +8,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchBox } from "@/components/ui/SearchBox";
 import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
+import { AddSummary, Avatar, Badge, EmptyState, PageHeader } from "@/components/ui/Kit";
 import { FilterBar } from "@/components/slots/FilterBar";
 import { activeFields } from "@/lib/crm/fields";
 import { PAGE_SIZE, nameMap, pageFrom, qFrom, teamOptions } from "@/lib/crm/people";
@@ -49,52 +51,88 @@ export default async function ContactsPage({ searchParams }: { searchParams: Pro
   if (companyId) params.company = companyId;
   const companyName = companyId ? companies.find((c) => c.id === companyId)?.name : null;
 
+  const owner = (id: string | null) => (id ? names.get(id) ?? "—" : "—");
+
   return (
-    <section className="space-y-4">
+    <section className="space-y-6">
       <AutoRefresh />
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className={ui.h1}>Contacts</h1>
-          <p className={ui.muted}>
-            {companyName ? <>Contacts at <strong>{companyName}</strong> · <Link href="/contacts" className="underline">show all</Link></> : "Everyone you sell to."}
-          </p>
-        </div>
-        {can(ctx, "crm.export") && (
-          <a href={`/api/export/contacts${q ? `?q=${encodeURIComponent(q)}` : ""}`} className={ui.btn} download>⬇ Export CSV</a>
+      <PageHeader
+        title="Contacts"
+        description={companyName ? <>Contacts at <strong className="text-stone-900">{companyName}</strong> · <Link href="/contacts" className={ui.link}>Show all contacts</Link></> : "Everyone you sell to."}
+        actions={can(ctx, "crm.export") && (
+          <a href={`/api/export/contacts${q ? `?q=${encodeURIComponent(q)}` : ""}`} className={ui.btn} download>
+            <Icon name="download" className="h-4 w-4" /> Export CSV
+          </a>
         )}
-      </div>
+      />
 
       {can(ctx, "crm.create") && (
-        <details className={ui.card}>
-          <summary className="cursor-pointer font-medium">＋ New contact</summary>
-          <div className="mt-3">
+        <details className={ui.cardFlush}>
+          <AddSummary>New contact</AddSummary>
+          <div className="border-t border-stone-200 p-5">
             <ContactForm defs={defs} companies={companies} team={team} />
           </div>
         </details>
       )}
 
-      <FilterBar entity="contact" />
-      <SearchBox q={q} placeholder="Search by name, phone or email" hidden={companyId ? { company: companyId } : {}} />
+      <div className="space-y-3">
+        <FilterBar entity="contact" />
+        <SearchBox q={q} placeholder="Search by name, phone or email" hidden={companyId ? { company: companyId } : {}} />
+      </div>
 
       {rows.length === 0 ? (
-        <p className={ui.muted}>No contacts found.</p>
+        <EmptyState icon="users" title={q ? `No contacts match “${q}”` : "No contacts yet"}>
+          {q ? "Check the spelling, or search by phone number or email instead." : "Contacts are added automatically when leads arrive, or you can add one above."}
+        </EmptyState>
       ) : (
-        <div className={`${ui.card} p-0`}>
-          <div className="hidden grid-cols-5 gap-3 border-b border-stone-200 px-4 py-2 text-xs font-semibold uppercase text-stone-600 md:grid">
-            <span>Name</span><span>Company</span><span>Phone</span><span>Email</span><span>Owner</span>
-          </div>
-          <ul className="divide-y divide-stone-200">
+        <div className={ui.cardFlush}>
+          <table className="hidden w-full text-sm md:table">
+            <caption className="sr-only">Contacts</caption>
+            <thead className="border-b border-stone-200 bg-stone-50/70">
+              <tr>
+                <th scope="col" className={ui.th}>Name</th>
+                <th scope="col" className={ui.th}>Company</th>
+                <th scope="col" className={ui.th}>Phone</th>
+                <th scope="col" className={ui.th}>Email</th>
+                <th scope="col" className={ui.th}>Owner</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {rows.map((c) => (
+                <tr key={c.id} className={ui.row}>
+                  <td className="max-w-[16rem] px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <Avatar name={c.name} size="sm" />
+                      <div className="min-w-0">
+                        <Link href={`/contacts/${c.id}`} className="block truncate font-semibold text-stone-900 hover:text-emerald-800 hover:underline">{c.name}</Link>
+                        {c.tags.length > 0 && <span className="block truncate text-xs text-stone-500">{c.tags.map((t) => `#${t}`).join(" ")}</span>}
+                      </div>
+                      {c.optedOut && <Badge tone="bad" icon="ban">Opted out</Badge>}
+                    </div>
+                  </td>
+                  <td className="max-w-[12rem] truncate px-4 py-3 text-stone-700">{c.company?.name ?? "—"}</td>
+                  <td className="whitespace-nowrap px-4 py-3 tabular-nums text-stone-700">{c.phone ?? "—"}</td>
+                  <td className="max-w-[14rem] truncate px-4 py-3 text-stone-700">{c.email ?? "—"}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-stone-700">{owner(c.ownerId)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ul className="divide-y divide-stone-100 md:hidden">
             {rows.map((c) => (
-              <li key={c.id} className="grid gap-1 px-4 py-3 text-sm md:grid-cols-5 md:gap-3">
-                <span className="min-w-0 break-words">
-                  <Link href={`/contacts/${c.id}`} className="font-medium text-emerald-800 underline">{c.name}</Link>
-                  {c.optedOut && <span className="ml-2 rounded bg-red-100 px-1.5 py-0.5 text-xs text-red-800">⊘ Opted out</span>}
-                  {c.tags.length > 0 && <span className="block text-xs text-stone-500">{c.tags.map((t) => `#${t}`).join(" ")}</span>}
-                </span>
-                <span className="min-w-0 break-words"><span className="text-stone-500 md:hidden">Company: </span>{c.company?.name ?? "—"}</span>
-                <span className="min-w-0 break-all"><span className="text-stone-500 md:hidden">Phone: </span>{c.phone ?? "—"}</span>
-                <span className="min-w-0 break-all"><span className="text-stone-500 md:hidden">Email: </span>{c.email ?? "—"}</span>
-                <span className="min-w-0 break-words"><span className="text-stone-500 md:hidden">Owner: </span>{c.ownerId ? names.get(c.ownerId) ?? "—" : "—"}</span>
+              <li key={c.id}>
+                <Link href={`/contacts/${c.id}`} className="flex items-start gap-3 px-4 py-3.5 hover:bg-stone-50">
+                  <Avatar name={c.name} size="sm" />
+                  <span className="min-w-0 flex-1 text-sm">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-stone-900">{c.name}</span>
+                      {c.optedOut && <Badge tone="bad" icon="ban">Opted out</Badge>}
+                    </span>
+                    <span className="mt-0.5 block break-words text-stone-600">{[c.company?.name, c.phone, c.email].filter(Boolean).join(" · ") || "No details yet"}</span>
+                    <span className="mt-0.5 block text-xs text-stone-500">Owner: {owner(c.ownerId)}</span>
+                  </span>
+                  <Icon name="chevronRight" className="mt-1 h-4 w-4 text-stone-400" />
+                </Link>
               </li>
             ))}
           </ul>

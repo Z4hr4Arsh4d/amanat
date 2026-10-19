@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useAction } from "@/components/ui/useAction";
 import { Spinner } from "@/components/ui/Spinner";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
 import type { FieldDefView } from "@/components/ui/DynamicFields";
 import { ContactForm, type ContactFormValues } from "../ContactForm";
 import { deleteContact } from "../actions";
@@ -21,7 +22,7 @@ export function ContactActions({ initial, defs, companies, team, canEdit, canDel
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap gap-2">
-        {canEdit && !editing && <button type="button" className={ui.btn} onClick={() => setEditing(true)}>✎ Edit contact</button>}
+        {canEdit && !editing && <button type="button" className={ui.btn} onClick={() => setEditing(true)}><Icon name="pencil" className="h-4 w-4" />Edit contact</button>}
         {canDelete && (
           <button
             type="button"
@@ -36,12 +37,13 @@ export function ContactActions({ initial, defs, companies, team, canEdit, canDel
               });
             }}
           >
-            {pending && <Spinner />} Delete
+            {pending ? <Spinner /> : <Icon name="trash" className="h-4 w-4" />}Delete
           </button>
         )}
       </div>
       {editing && (
-        <div className={ui.card}>
+        <div className="animate-fade-in rounded-xl border border-stone-200 bg-stone-50/60 p-4 sm:p-5">
+          <h2 className={`${ui.h2} mb-4`}>Edit contact</h2>
           <ContactForm initial={initial} defs={defs} companies={companies} team={team} onDone={() => setEditing(false)} />
         </div>
       )}

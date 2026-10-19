@@ -13,6 +13,11 @@ import { AutoRefresh } from "@/lib/integrations/ui/AutoRefresh";
 import { CopyField } from "@/lib/integrations/ui/CopyField";
 import { DisconnectButton, MetaForm, PrepareWebhookButton, StripeForm, TestButton, TwilioForm, WebchatToggle } from "./forms";
 import { prisma } from "@/lib/db";
+import { Icon, type IconName } from "@/components/ui/Icon";
+import { Notice, PageHeader } from "@/components/ui/Kit";
+import { ui } from "@/components/ui/styles";
+
+const PROVIDER_ICON: Record<Provider, IconName> = { WEBCHAT: "globe", META: "whatsapp", TWILIO: "whatsapp", STRIPE: "card", GOOGLE: "calendar", TELEGRAM: "send" };
 
 export const dynamic = "force-dynamic";
 
@@ -65,50 +70,58 @@ function Card(props: {
   children?: React.ReactNode;
 }) {
   return (
-    <section aria-labelledby={`h-${props.provider}`} className="flex min-w-0 flex-col gap-4 rounded-lg border border-stone-200 bg-white p-4 shadow-sm">
-      <header className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 id={`h-${props.provider}`} className="text-lg font-semibold">{props.title}</h2>
-          <p className="text-sm text-stone-600">{props.subtitle}</p>
+    <section aria-labelledby={`h-${props.provider}`} className="flex min-w-0 flex-col rounded-xl border border-stone-200 bg-white shadow-xs">
+      <header className="flex flex-wrap items-start justify-between gap-3 border-b border-stone-100 p-5">
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-stone-100 text-stone-600"><Icon name={PROVIDER_ICON[props.provider]} className="h-5 w-5" /></span>
+          <div className="min-w-0">
+            <h2 id={`h-${props.provider}`} className={ui.h2}>{props.title}</h2>
+            <p className="mt-0.5 text-sm leading-6 text-stone-600">{props.subtitle}</p>
+          </div>
         </div>
         {props.chip ?? <IntegrationStatusChip status={props.status} />}
       </header>
 
-      <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-        <div><dt className="inline text-stone-600">Last worked: </dt><dd className="inline font-medium"><TimeAgo date={props.lastSuccessAt ?? null} /></dd></div>
-        {props.lastError && props.status !== "NOT_CONNECTED" && (
-          <div className="sm:col-span-2"><dt className="inline text-stone-600">Last problem: </dt><dd className="inline text-red-800">{props.lastError}</dd></div>
-        )}
-      </dl>
+      <div className="flex flex-1 flex-col gap-4 p-5">
+        <dl className="grid grid-cols-1 gap-1 text-sm">
+          <div><dt className="inline text-stone-500">Last worked: </dt><dd className="inline font-semibold text-stone-900"><TimeAgo date={props.lastSuccessAt ?? null} /></dd></div>
+          {props.lastError && props.status !== "NOT_CONNECTED" && (
+            <div><dt className="inline text-stone-500">Last problem: </dt><dd className="inline font-medium text-red-800">{props.lastError}</dd></div>
+          )}
+        </dl>
 
-      {props.children}
+        {props.children}
 
-      <details className="rounded border border-stone-200 bg-stone-50 p-3 text-sm" open>
-        <summary className="cursor-pointer font-medium">What this can and can&apos;t do</summary>
-        <ul className="mt-2 list-disc space-y-1 pl-5 text-stone-700">
-          {LIMITS[props.provider].map((l) => <li key={l}>{l}</li>)}
-        </ul>
-      </details>
-
-      <div className="text-sm">
-        <h3 className="font-medium">Recent errors</h3>
-        {props.errors.length === 0 ? (
-          <p className="text-stone-600">No recent errors.</p>
-        ) : (
-          <ul className="mt-1 space-y-1">
-            {props.errors.map((e) => (
-              <li key={e.id} className="flex flex-col gap-0.5 border-l-2 border-red-400 pl-2 sm:flex-row sm:gap-2">
-                <span className="shrink-0 text-xs text-stone-600"><TimeAgo date={e.createdAt} /> · {e.type}</span>
-                <span className="break-words text-red-900">{e.error}</span>
-              </li>
-            ))}
+        <details className="group rounded-lg bg-stone-50 text-sm" open>
+          <summary className="flex list-none items-center justify-between gap-2 px-3.5 py-2.5 font-semibold text-stone-800">
+            What this can and can&apos;t do
+            <Icon name="chevronDown" className="chevron h-4 w-4 text-stone-500 transition-transform" />
+          </summary>
+          <ul className="list-disc space-y-1 px-3.5 pb-3 pl-8 leading-6 text-stone-600 marker:text-stone-400">
+            {LIMITS[props.provider].map((l) => <li key={l}>{l}</li>)}
           </ul>
-        )}
-        {props.canSeeHistory && (
-          <Link href={`/integrations/history?provider=${props.provider}`} className="mt-2 inline-block text-emerald-800 underline">
-            See full sync history
-          </Link>
-        )}
+        </details>
+
+        <div className="mt-auto space-y-2 border-t border-stone-100 pt-4 text-sm">
+          <h3 className={ui.h3}>Recent errors</h3>
+          {props.errors.length === 0 ? (
+            <p className="flex items-center gap-1.5 text-stone-600"><Icon name="checkCircle" className="h-4 w-4 text-emerald-600" />No recent errors.</p>
+          ) : (
+            <ul className="space-y-1.5">
+              {props.errors.map((e) => (
+                <li key={e.id} className="flex flex-col gap-0.5 rounded-lg bg-red-50 px-3 py-2 sm:flex-row sm:gap-2">
+                  <span className="shrink-0 text-xs text-stone-600"><TimeAgo date={e.createdAt} /> · {e.type}</span>
+                  <span className="break-words text-red-900">{e.error}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          {props.canSeeHistory && (
+            <Link href={`/integrations/history?provider=${props.provider}`} className="inline-flex items-center gap-1 text-sm font-semibold text-emerald-800 hover:underline">
+              See full sync history <Icon name="arrowRight" className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
       </div>
     </section>
   );
@@ -164,33 +177,23 @@ export default async function IntegrationsPage() {
   const localUrl = /localhost|127\.0\.0\.1/.test(base);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
+    <div className="space-y-6">
       <AutoRefresh seconds={5} />
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold">Integrations</h1>
-          <p className="text-sm text-stone-600">
-            Connections to WhatsApp, Stripe, Google Calendar and Telegram for this workspace.
-            {!canManage && " You can view them; ask an admin to change them."}
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {canSeeHistory && (
-            <Link href="/integrations/history" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
-              Sync history
-            </Link>
-          )}
-          {faultLabAllowed(ctx) && (
-            <Link href="/integrations/fault-lab" className="rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
-              Fault lab
-            </Link>
-          )}
-        </div>
-      </header>
+      <PageHeader
+        title="Integrations"
+        description={<>Connections to WhatsApp, Stripe, Google Calendar and Telegram for this workspace.{!canManage && " You can view them; ask an admin to change them."}</>}
+        actions={<>
+          {canSeeHistory && <Link href="/integrations/history" className={ui.btn}><Icon name="history" className="h-4 w-4" />Sync history</Link>}
+          {faultLabAllowed(ctx) && <Link href="/integrations/fault-lab" className={ui.btn}><Icon name="flask" className="h-4 w-4" />Fault lab</Link>}
+        </>}
+      />
 
-      <details className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-950" open>
-        <summary className="cursor-pointer font-semibold">Try everything in 5 minutes</summary>
-        <ol className="mt-2 list-decimal space-y-1 pl-5">
+      <details className="rounded-xl border border-emerald-200 bg-emerald-50/70 text-sm text-emerald-950" open>
+        <summary className="flex list-none items-center justify-between gap-2 px-5 py-3.5 font-bold">
+          <span className="flex items-center gap-2"><Icon name="zap" className="h-4 w-4 text-emerald-700" />Try everything in 5 minutes</span>
+          <Icon name="chevronDown" className="chevron h-4 w-4 transition-transform" />
+        </summary>
+        <ol className="list-decimal space-y-1.5 px-5 pb-4 pl-10 leading-6 marker:font-bold marker:text-emerald-700">
           <li><strong>Customer chat:</strong> open the <a className="underline" href={chatUrl} target="_blank" rel="noreferrer">customer chat</a> in a new tab, type a name, phone and message. A lead is created and the customer gets an automatic reply.</li>
           <li><strong>Reply:</strong> open the <Link className="underline" href="/inbox">Inbox</Link>, pick the chat and answer. The reply shows up in the customer&apos;s tab within seconds.</li>
           <li><strong>Escalation:</strong> start a chat and do not answer. After the wait time set in Assignment rules the lead moves to the next person and the customer is told who took over (the worker must be running).</li>
@@ -201,21 +204,21 @@ export default async function IntegrationsPage() {
       </details>
 
       {localUrl && canManage && (
-        <p role="note" className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          <span aria-hidden="true">⚠ </span>APP_URL is <code>{base}</code>. Twilio and Stripe cannot reach a localhost address.
+        <Notice tone="warn" role="note">
+          APP_URL is <code>{base}</code>. Twilio and Stripe cannot reach a localhost address.
           Run <code>ngrok http 3000</code> (or deploy) and set APP_URL to the public https URL, then restart the app.
-        </p>
+        </Notice>
       )}
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title="Website chat (built in)" subtitle="Works right now, no account needed. Customers chat with your team from a link." provider="WEBCHAT"
           status={chatOn ? "CONNECTED" : "NOT_CONNECTED"} lastSuccessAt={webchat?.lastSuccessAt} lastError={null} errors={errorsFor("WEBCHAT")} canSeeHistory={canSeeHistory}
           chip={chatOn ? <Chip tone="ok">On</Chip> : <Chip tone="off">Turned off</Chip>}>
           <div className="space-y-2">
             <CopyField label="Customer chat link (share this)" value={chatUrl} hint={chatOn ? "Open it in another browser tab or on your phone to play the customer." : "The chat is turned off, so this link shows “Chat is not available”."} />
             <div className="flex flex-wrap gap-2">
-              {chatOn && <a href={chatUrl} target="_blank" rel="noreferrer" className="inline-flex items-center rounded bg-emerald-800 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700">Open the customer chat</a>}
-              <Link href="/inbox" className="inline-flex items-center rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">Open the Inbox</Link>
+              {chatOn && <a href={chatUrl} target="_blank" rel="noreferrer" className={ui.btnPrimary}><Icon name="external" className="h-4 w-4" />Open the customer chat</a>}
+              <Link href="/inbox" className={ui.btn}><Icon name="inbox" className="h-4 w-4" />Open the Inbox</Link>
               {canManage && <WebchatToggle on={chatOn} />}
             </div>
           </div>
@@ -224,12 +227,12 @@ export default async function IntegrationsPage() {
         <Card title="WhatsApp (Meta Cloud API)" subtitle="Optional. Free from Meta, needs a Facebook developer account. Receive WhatsApp messages as leads." provider="META"
           status={meta?.status ?? "NOT_CONNECTED"} lastSuccessAt={meta?.lastSuccessAt} lastError={meta?.lastError} errors={errorsFor("META")} canSeeHistory={canSeeHistory}>
           {metaOn && (
-            <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-              <div><dt className="inline text-stone-600">Number: </dt><dd className="inline font-mono">{metaCfg.displayPhone ?? "—"}</dd></div>
-              <div><dt className="inline text-stone-600">Name: </dt><dd className="inline">{metaCfg.verifiedName ?? "—"}</dd></div>
-              <div><dt className="inline text-stone-600">Phone number ID: </dt><dd className="inline font-mono">{metaCfg.phoneNumberId}</dd></div>
-              <div><dt className="inline text-stone-600">Access token: </dt><dd className="inline font-mono">{metaCfg.accessTokenMasked}</dd></div>
-              <div><dt className="inline text-stone-600">App secret: </dt><dd className="inline font-mono">{metaCfg.appSecretMasked}</dd></div>
+            <dl className="grid grid-cols-1 gap-1.5 rounded-lg border border-stone-200 p-3 text-sm sm:grid-cols-2">
+              <div><dt className="inline text-stone-500">Number: </dt><dd className="inline font-mono">{metaCfg.displayPhone ?? "—"}</dd></div>
+              <div><dt className="inline text-stone-500">Name: </dt><dd className="inline">{metaCfg.verifiedName ?? "—"}</dd></div>
+              <div><dt className="inline text-stone-500">Phone number ID: </dt><dd className="inline font-mono">{metaCfg.phoneNumberId}</dd></div>
+              <div><dt className="inline text-stone-500">Access token: </dt><dd className="inline font-mono">{metaCfg.accessTokenMasked}</dd></div>
+              <div><dt className="inline text-stone-500">App secret: </dt><dd className="inline font-mono">{metaCfg.appSecretMasked}</dd></div>
             </dl>
           )}
           {canManage && (meta ? (
@@ -244,7 +247,7 @@ export default async function IntegrationsPage() {
           {canManage ? (
             <MetaForm connected={metaOn} initial={{ phoneNumberId: metaCfg.phoneNumberId ?? "", wabaId: metaCfg.wabaId ?? "" }} />
           ) : (
-            <p className="text-sm text-stone-600">Read only: you need the “Connect, change or remove integrations” permission to change this.</p>
+            <p className="text-sm text-stone-500">Read only: you need the “Connect, change or remove integrations” permission to change this.</p>
           )}
           {canManage && metaOn && (
             <div className="flex flex-wrap gap-2"><TestButton provider="META" /><DisconnectButton provider="META" label="WhatsApp (Meta)" /></div>
@@ -254,18 +257,18 @@ export default async function IntegrationsPage() {
         <Card title="WhatsApp (Twilio) — alternative" subtitle={metaOn ? "Optional. Not used while WhatsApp (Meta) is connected." : "Optional. Twilio account needed; the website chat works without it."} provider="TWILIO"
           status={twilio?.status ?? "NOT_CONNECTED"} lastSuccessAt={twilio?.lastSuccessAt} lastError={twilio?.lastError} errors={errorsFor("TWILIO")} canSeeHistory={canSeeHistory}>
           {twilio?.status && twilio.status !== "NOT_CONNECTED" && (
-            <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-              <div><dt className="inline text-stone-600">Account SID: </dt><dd className="inline font-mono">{twilioCfg.accountSidMasked}</dd></div>
-              <div><dt className="inline text-stone-600">Auth Token: </dt><dd className="inline font-mono">{twilioCfg.authTokenMasked}</dd></div>
-              <div><dt className="inline text-stone-600">Sandbox number: </dt><dd className="inline font-mono">{twilioCfg.fromNumber}</dd></div>
-              {twilioCfg.joinCode && <div><dt className="inline text-stone-600">Join phrase: </dt><dd className="inline font-mono">{twilioCfg.joinCode}</dd></div>}
+            <dl className="grid grid-cols-1 gap-1.5 rounded-lg border border-stone-200 p-3 text-sm sm:grid-cols-2">
+              <div><dt className="inline text-stone-500">Account SID: </dt><dd className="inline font-mono">{twilioCfg.accountSidMasked}</dd></div>
+              <div><dt className="inline text-stone-500">Auth Token: </dt><dd className="inline font-mono">{twilioCfg.authTokenMasked}</dd></div>
+              <div><dt className="inline text-stone-500">Sandbox number: </dt><dd className="inline font-mono">{twilioCfg.fromNumber}</dd></div>
+              {twilioCfg.joinCode && <div><dt className="inline text-stone-500">Join phrase: </dt><dd className="inline font-mono">{twilioCfg.joinCode}</dd></div>}
             </dl>
           )}
           {canManage && (twilio ? (
             <div className="space-y-2">
               <CopyField label="Webhook URL (paste into Twilio → Messaging → WhatsApp sandbox settings → “When a message comes in”, method POST)"
                 value={webhookUrl("twilio", twilio.id)} />
-              <p className="text-xs text-stone-600">Delivery status callbacks are set automatically on every message we send.</p>
+              <p className={ui.hint}>Delivery status callbacks are set automatically on every message we send.</p>
             </div>
           ) : (
             <PrepareWebhookButton provider="TWILIO" />
@@ -274,7 +277,7 @@ export default async function IntegrationsPage() {
             <TwilioForm connected={twilio?.status === "CONNECTED" || twilio?.status === "ERROR"}
               initial={{ fromNumber: twilioCfg.fromNumber ?? "whatsapp:+14155238886", joinCode: twilioCfg.joinCode ?? "" }} />
           ) : (
-            <p className="text-sm text-stone-600">Read only: you need the “Connect, change or remove integrations” permission to change this.</p>
+            <p className="text-sm text-stone-500">Read only: you need the “Connect, change or remove integrations” permission to change this.</p>
           )}
           {canManage && twilio && twilio.status !== "NOT_CONNECTED" && (
             <div className="flex flex-wrap gap-2"><TestButton provider="TWILIO" /><DisconnectButton provider="TWILIO" label="Twilio" /></div>
@@ -284,15 +287,15 @@ export default async function IntegrationsPage() {
         <Card title="Payments (Stripe)" subtitle="Payment links for opportunities; status updates arrive by webhook." provider="STRIPE"
           status={stripe?.status ?? "NOT_CONNECTED"} lastSuccessAt={stripe?.lastSuccessAt} lastError={stripe?.lastError} errors={errorsFor("STRIPE")} canSeeHistory={canSeeHistory}>
           {stripe?.status && stripe.status !== "NOT_CONNECTED" && (
-            <dl className="grid grid-cols-1 gap-1 text-sm sm:grid-cols-2">
-              <div><dt className="inline text-stone-600">Secret key: </dt><dd className="inline font-mono">{stripeCfg.secretKeyMasked}</dd></div>
-              <div><dt className="inline text-stone-600">Signing secret: </dt><dd className="inline font-mono">{stripeCfg.webhookSecretMasked}</dd></div>
+            <dl className="grid grid-cols-1 gap-1.5 rounded-lg border border-stone-200 p-3 text-sm sm:grid-cols-2">
+              <div><dt className="inline text-stone-500">Secret key: </dt><dd className="inline font-mono">{stripeCfg.secretKeyMasked}</dd></div>
+              <div><dt className="inline text-stone-500">Signing secret: </dt><dd className="inline font-mono">{stripeCfg.webhookSecretMasked}</dd></div>
             </dl>
           )}
           {canManage && (stripe ? (
             <div className="space-y-2 text-sm">
               <CopyField label="Webhook endpoint URL (Stripe → Developers → Webhooks → Add endpoint)" value={webhookUrl("stripe", stripe.id)} />
-              <p className="text-xs text-stone-600">
+              <p className={ui.hint}>
                 Events to send: <code>checkout.session.completed</code>, <code>checkout.session.expired</code>,{" "}
                 <code>checkout.session.async_payment_failed</code>, <code>payment_intent.payment_failed</code>, <code>charge.refunded</code>.
               </p>
@@ -303,7 +306,7 @@ export default async function IntegrationsPage() {
           {canManage ? (
             <StripeForm connected={stripe?.status === "CONNECTED" || stripe?.status === "ERROR"} />
           ) : (
-            <p className="text-sm text-stone-600">Read only: you need the “Connect, change or remove integrations” permission to change this.</p>
+            <p className="text-sm text-stone-500">Read only: you need the “Connect, change or remove integrations” permission to change this.</p>
           )}
           {canManage && stripe && stripe.status !== "NOT_CONNECTED" && (
             <div className="flex flex-wrap gap-2"><TestButton provider="STRIPE" /><DisconnectButton provider="STRIPE" label="Stripe" /></div>
@@ -318,20 +321,20 @@ export default async function IntegrationsPage() {
             {process.env.DEMO_MODE === "true" ? "Employees can also use a demo calendar (no Google) while DEMO_MODE=true." : ""}
           </p>
           <p className="text-sm">
-            <Link href="/settings/calendar" className="text-emerald-800 underline">Connect or check your own calendar</Link>
+            <Link href="/settings/calendar" className={ui.link}>Connect or check your own calendar</Link>
           </p>
           {canManage && (
-            <div className="overflow-hidden rounded border border-stone-200">
+            <div className="overflow-hidden rounded-lg border border-stone-200">
               <table className="w-full text-left text-sm">
                 <caption className="sr-only">Calendar connection by employee</caption>
-                <thead className="bg-stone-50 text-xs text-stone-600"><tr><th className="px-3 py-2 font-medium">Employee</th><th className="px-3 py-2 font-medium">Calendar</th></tr></thead>
+                <thead className="bg-stone-50"><tr><th scope="col" className={`${ui.th} !px-3`}>Employee</th><th scope="col" className={`${ui.th} !px-3`}>Calendar</th></tr></thead>
                 <tbody>
                   {users.map((u) => {
                     const c = calBy.get(u.id);
                     return (
                       <tr key={u.id} className="border-t border-stone-100">
-                        <td className="px-3 py-2"><span className="block">{u.name}</span>{c?.googleEmail && <span className="block break-all text-xs text-stone-600">{c.googleEmail}</span>}</td>
-                        <td className="px-3 py-2">
+                        <td className="px-3 py-2.5"><span className="block font-semibold text-stone-900">{u.name}</span>{c?.googleEmail && <span className="block break-all text-xs text-stone-600">{c.googleEmail}</span>}</td>
+                        <td className="px-3 py-2.5">
                           {c?.status === "CONNECTED" ? <Chip tone="ok">{c.googleEmail.endsWith("(demo calendar)") ? "Connected (demo)" : "Connected"}</Chip> : c?.status === "NEEDS_RECONNECT" ? <Chip tone="bad">Needs reconnect</Chip> : <Chip tone="off">Not connected</Chip>}
                         </td>
                       </tr>

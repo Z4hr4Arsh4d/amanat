@@ -5,6 +5,9 @@ import { useState } from "react";
 import useSWR from "swr";
 import { useAction } from "@/components/ui/useAction";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
+import { Notice } from "@/components/ui/Kit";
+import { Spinner } from "@/components/ui/Spinner";
 import { connectTelegram, disconnectTelegram, getTelegramStatus, sendTelegramTest, startTelegramLink, type TelegramStatus } from "@/app/(app)/leads/telegram-actions";
 
 async function fetchStatus(): Promise<TelegramStatus> {
@@ -12,10 +15,6 @@ async function fetchStatus(): Promise<TelegramStatus> {
   if (!r.ok) throw new Error(r.error);
   return r.data;
 }
-
-const CHIP = {
-  NOT_CONNECTED: "○ Not connected", CONNECTED: "✓ Connected", ERROR: "⚠ Error",
-} as const;
 
 /** "Connect Telegram" + "Send test alert" for the logged-in person. */
 export function TelegramConnectButton() {
@@ -28,14 +27,16 @@ export function TelegramConnectButton() {
         type="button" className={ui.btn} disabled={pending}
         onClick={() => run(() => startTelegramLink(), { success: "Opening Telegram. Press Start in the bot.", onSuccess: (d) => { window.open(d.url, "_blank", "noopener"); mutate(); } })}
       >
-        {data.iAmLinked ? "Reconnect Telegram" : "Connect Telegram"}
+        <Icon name="send" className="h-4 w-4" />{data.iAmLinked ? "Reconnect Telegram" : "Connect Telegram"}
       </button>
       {data.iAmLinked && (
         <button type="button" className={ui.btn} disabled={pending} onClick={() => run(() => sendTelegramTest(), { success: (d) => d.message })}>
           Send test alert
         </button>
       )}
-      <span className={ui.muted}>{data.iAmLinked ? "✓ Your Telegram is linked." : "Not linked yet."}</span>
+      <span className={`inline-flex items-center gap-1.5 text-sm ${data.iAmLinked ? "font-semibold text-emerald-800" : "text-stone-600"}`}>
+        <Icon name={data.iAmLinked ? "checkCircle" : "circle"} className="h-4 w-4" />{data.iAmLinked ? "Your Telegram is linked." : "Not linked yet."}
+      </span>
     </div>
   );
 }
@@ -46,28 +47,20 @@ export function TelegramIntegrationCard({ canManage }: { canManage: boolean }) {
   const [token, setToken] = useState("");
 
   return (
-    <section className={`${ui.card} space-y-3`} aria-label="Telegram">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-lg font-semibold text-stone-900">Telegram</h2>
-        {data && <span className="rounded-full border border-stone-300 px-2 py-0.5 text-xs text-stone-800">{CHIP[data.status]}</span>}
-      </div>
-      <div className="rounded-md bg-stone-50 p-3 text-sm text-stone-700">
-        <p className="font-medium text-stone-800">What this can and can&apos;t do</p>
-        <p>Each employee must press Start on the bot once to receive alerts.</p>
-      </div>
-      {error && <p role="alert" className="text-sm text-red-800">Could not load Telegram. {error.message}</p>}
-      {data?.lastError && <p role="alert" className="text-sm text-red-800">⚠ Last error: {data.lastError}</p>}
+    <section className="space-y-4" aria-label="Telegram settings">
+      {error && <Notice tone="bad">Could not load Telegram. {error.message}</Notice>}
+      {data?.lastError && <Notice tone="bad" title="Last error">{data.lastError}</Notice>}
 
       {data?.connected && (
-        <p className="text-sm text-stone-800">
-          Bot: <span className="font-medium">@{data.botUsername}</span> · Token: <span className="font-mono">{data.maskedToken}</span>
-          {data.lastSuccessAt && <> · Last worked {new Date(data.lastSuccessAt).toLocaleTimeString()}</>}
-        </p>
+        <dl className="grid grid-cols-1 gap-1.5 rounded-lg border border-stone-200 p-3 text-sm sm:grid-cols-2">
+          <div><dt className="inline text-stone-500">Bot: </dt><dd className="inline font-semibold">@{data.botUsername}</dd></div>
+          <div><dt className="inline text-stone-500">Token: </dt><dd className="inline font-mono">{data.maskedToken}</dd></div>
+        </dl>
       )}
 
       {canManage && (
         <form
-          className="space-y-2"
+          className={ui.field}
           onSubmit={(e) => {
             e.preventDefault();
             run(() => connectTelegram({ botToken: token }), { success: "Telegram connected.", onSuccess: () => { setToken(""); mutate(); } });
@@ -75,8 +68,8 @@ export function TelegramIntegrationCard({ canManage }: { canManage: boolean }) {
         >
           <label htmlFor="tg-token" className={ui.label}>{data?.connected ? "Replace bot token" : "Bot token from @BotFather"}</label>
           <input id="tg-token" type="password" autoComplete="off" value={token} onChange={(e) => setToken(e.target.value)} className={ui.input} placeholder="123456:ABC…" />
-          <div className="flex flex-wrap gap-2">
-            <button type="submit" disabled={pending || token.trim() === ""} className={ui.btnPrimary}>{pending ? "Working…" : data?.connected ? "Update" : "Connect"}</button>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button type="submit" disabled={pending || token.trim() === ""} className={ui.btnPrimary}>{pending && <Spinner />}{pending ? "Working…" : data?.connected ? "Update" : "Connect"}</button>
             {data?.connected && (
               <button type="button" disabled={pending} className={ui.btnDanger} onClick={() => run(() => disconnectTelegram(), { success: "Telegram disconnected.", onSuccess: () => mutate() })}>
                 Disconnect
@@ -86,17 +79,20 @@ export function TelegramIntegrationCard({ canManage }: { canManage: boolean }) {
         </form>
       )}
 
-      <div>
-        <h3 className="text-sm font-medium text-stone-800">Your Telegram</h3>
+      <div className="space-y-2">
+        <h3 className={ui.h3}>Your Telegram</h3>
         <TelegramConnectButton />
       </div>
 
       {data && data.failedAlerts.length > 0 && (
-        <div>
-          <h3 className="text-sm font-medium text-stone-800">Failed alerts</h3>
-          <ul className="mt-1 space-y-1">
+        <div className="space-y-2">
+          <h3 className={ui.h3}>Failed alerts</h3>
+          <ul className="space-y-1.5">
             {data.failedAlerts.map((f) => (
-              <li key={f.id} className="text-sm text-red-800">✗ {f.title} · {new Date(f.at).toLocaleString()} · {f.error}</li>
+              <li key={f.id} className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-900">
+                <Icon name="xCircle" className="mt-0.5 h-4 w-4 text-red-600" />
+                <span className="min-w-0 break-words"><strong>{f.title}</strong> · {new Date(f.at).toLocaleString()} · {f.error}</span>
+              </li>
             ))}
           </ul>
         </div>

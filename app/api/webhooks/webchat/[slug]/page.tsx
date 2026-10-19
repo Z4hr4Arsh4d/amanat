@@ -11,8 +11,8 @@ export default async function ChatPage({ params }: { params: Promise<{ slug: str
   if (!ws || !ws.enabled) {
     return (
       <main className="grid min-h-dvh place-items-center bg-stone-50 p-4 text-stone-900">
-        <div className="max-w-sm rounded-xl border border-stone-200 bg-white p-6 text-center shadow-sm">
-          <h1 className="text-lg font-semibold">Chat is not available</h1>
+        <div className="max-w-sm rounded-2xl border border-stone-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-lg font-bold">Chat is not available</h1>
           <p className="mt-2 text-sm text-stone-600">{ws ? "The chat is switched off right now." : "We could not find this company."} Please contact them another way.</p>
         </div>
       </main>

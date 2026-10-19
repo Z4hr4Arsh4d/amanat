@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useAction } from "@/components/ui/useAction";
 import { Spinner } from "@/components/ui/Spinner";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
+import { EmptyState } from "@/components/ui/Kit";
 import { createRole, deleteRole, updateRole } from "./actions";
 
 type Role = { id: string; name: string; permissions: string[]; users: number };
@@ -21,13 +23,13 @@ export function RolesClient({ roles, perms }: { roles: Role[]; perms: Perm[] }) 
           run(() => createRole({ name }), { success: `Role "${name.trim()}" created.`, onSuccess: () => setName("") });
         }}
       >
-        <div className="flex-1 space-y-1">
+        <div className={`flex-1 ${ui.field}`}>
           <label htmlFor="new-role" className={ui.label}>New role name</label>
           <input id="new-role" required value={name} onChange={(e) => setName(e.target.value)} className={ui.input} placeholder="e.g. Field technician" />
         </div>
-        <button disabled={pending} className={ui.btnPrimary}>{pending && <Spinner />} Create role</button>
+        <button disabled={pending} className={ui.btnPrimary}>{pending ? <Spinner /> : <Icon name="plus" className="h-4 w-4" />}Create role</button>
       </form>
-      {roles.length === 0 && <p className={ui.muted}>No roles yet. Create one above.</p>}
+      {roles.length === 0 && <EmptyState icon="key" title="No roles yet">Create one above, then give it to people on the Users page.</EmptyState>}
       <ul className="space-y-4">
         {roles.map((r) => (
           <RoleCard key={`${r.id}:${r.name}:${r.permissions.join(",")}`} role={r} perms={perms} />
@@ -58,40 +60,40 @@ function RoleCard({ role, perms }: { role: Role; perms: Perm[] }) {
   return (
     <li className={ui.card}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex-1 space-y-1">
+        <div className={`flex-1 ${ui.field}`}>
           <label htmlFor={`rn-${role.id}`} className={ui.label}>Role name</label>
-          <input id={`rn-${role.id}`} value={name} onChange={(e) => setName(e.target.value)} className={ui.input} />
+          <input id={`rn-${role.id}`} value={name} onChange={(e) => setName(e.target.value)} className={`${ui.input} sm:max-w-sm`} />
         </div>
-        <p className="text-sm text-stone-600">
-          Used by {role.users} {role.users === 1 ? "person" : "people"}
+        <p className="inline-flex items-center gap-1.5 pb-2.5 text-sm text-stone-600">
+          <Icon name="users" className="h-4 w-4 text-stone-400" />Used by <span className="font-semibold tabular-nums text-stone-900">{role.users}</span> {role.users === 1 ? "person" : "people"}
         </p>
       </div>
 
-      <fieldset className="mt-4">
-        <legend className="text-sm font-medium text-stone-800">Permissions</legend>
+      <fieldset className="mt-5">
+        <legend className={ui.label}>Permissions <span className="font-normal tabular-nums text-stone-500">({checked.size} of {perms.length})</span></legend>
         <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
           {perms.map((p) => {
             const cid = `p-${role.id}-${p.key}`;
             return (
-              <div key={p.key} className="flex items-start gap-2 rounded-md border border-stone-200 p-2">
+              <label key={p.key} htmlFor={cid} className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors ${checked.has(p.key) ? "border-emerald-300 bg-emerald-50/60" : "border-stone-200 hover:bg-stone-50"}`}>
                 <input
                   id={cid}
                   type="checkbox"
                   checked={checked.has(p.key)}
                   onChange={() => toggle(p.key)}
-                  className="mt-0.5 h-4 w-4 accent-emerald-800 focus:ring-2 focus:ring-emerald-700"
+                  className={`${ui.check} mt-0.5`}
                 />
-                <label htmlFor={cid} className="text-sm">
+                <span className="text-sm font-medium text-stone-900">
                   {p.label}
-                  <span className="block text-xs text-stone-500">{p.key}</span>
-                </label>
-              </div>
+                  <span className="block font-mono text-[11px] font-normal text-stone-500">{p.key}</span>
+                </span>
+              </label>
             );
           })}
         </div>
       </fieldset>
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-5 flex flex-wrap items-center gap-2 border-t border-stone-100 pt-4">
         <button
           type="button"
           disabled={pending || !dirty}
@@ -100,7 +102,7 @@ function RoleCard({ role, perms }: { role: Role; perms: Perm[] }) {
             run(() => updateRole({ roleId: role.id, name, permissions: [...checked] }), { success: `Role "${name.trim()}" saved.` })
           }
         >
-          {pending && <Spinner />} Save changes
+          {pending && <Spinner />}Save changes
         </button>
         <button
           type="button"
@@ -111,12 +113,12 @@ function RoleCard({ role, perms }: { role: Role; perms: Perm[] }) {
             run(() => deleteRole({ roleId: role.id }), { success: `Role "${role.name}" deleted.` });
           }}
         >
-          Delete role
+          <Icon name="trash" className="h-4 w-4" />Delete role
         </button>
         {role.users > 0 && (
-          <span className="text-xs text-stone-600">🔒 Can&apos;t delete while people use it. Move them first on the Users page.</span>
+          <span className="inline-flex items-center gap-1 text-xs text-stone-600"><Icon name="lock" className="h-3.5 w-3.5" />Can&apos;t delete while people use it. Move them first on the Users page.</span>
         )}
-        {dirty && <span className="text-xs font-medium text-amber-800">● Unsaved changes</span>}
+        {dirty && <span className="inline-flex items-center gap-1 text-xs font-semibold text-amber-800"><Icon name="dot" className="h-3.5 w-3.5" />Unsaved changes</span>}
       </div>
     </li>
   );
