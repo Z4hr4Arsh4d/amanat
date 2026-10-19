@@ -8,6 +8,8 @@ import { Pagination } from "@/components/ui/Pagination";
 import { SearchBox } from "@/components/ui/SearchBox";
 import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
+import { AddSummary, Badge, EmptyState, PageHeader } from "@/components/ui/Kit";
 import { FilterBar } from "@/components/slots/FilterBar";
 import { PAGE_SIZE, nameMap, pageFrom, qFrom, teamOptions } from "@/lib/crm/people";
 import { allOpportunityFields, pipelinesWithStages } from "@/lib/crm/pipelines";
@@ -57,29 +59,36 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
   if (q) base.q = q;
   if (stageFilter) base.stage = stageFilter;
   const tab = (v: string) => `/opportunities?${new URLSearchParams({ ...base, view: v }).toString()}`;
-  const tabCls = (on: boolean) => `rounded-md px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-700 ${on ? "bg-emerald-800 text-white" : "border border-stone-300 bg-white"}`;
+  const seg = (on: boolean) => `inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm font-semibold transition-colors ${on ? "bg-white text-stone-900 shadow-sm ring-1 ring-stone-200" : "text-stone-600 hover:text-stone-900"}`;
+  const pill = (on: boolean) => `inline-flex h-9 items-center rounded-full border px-3.5 text-sm font-semibold transition-colors ${on ? "border-emerald-800 bg-emerald-800 text-white" : "border-stone-300 bg-white text-stone-700 hover:border-stone-400 hover:bg-stone-50"}`;
+  const stageIcon = (kind: string) => (kind === "WON" ? "trophy" : kind === "LOST" ? "xCircle" : "dot") as "trophy" | "xCircle" | "dot";
+  const stageTone = (kind: string) => (kind === "WON" ? "ok" : kind === "LOST" ? "bad" : "neutral") as "ok" | "bad" | "neutral";
   const stages = pipeline?.stages ?? [];
   const canEdit = can(ctx, "crm.edit");
+  const stageName = stageFilter ? stages.find((x) => x.id === stageFilter)?.name : null;
 
   return (
-    <section className="space-y-4">
+    <section className="space-y-6">
       <AutoRefresh />
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className={ui.h1}>Opportunities</h1>
-          <p className={ui.muted}>Deals moving through your pipeline.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href={tab("list")} className={tabCls(view === "list")} aria-current={view === "list" ? "page" : undefined}>☰ List</Link>
-          <Link href={tab("board")} className={tabCls(view === "board")} aria-current={view === "board" ? "page" : undefined}>▦ Board</Link>
-          {can(ctx, "crm.export") && <a href="/api/export/opportunities" className={ui.btn} download>⬇ Export CSV</a>}
-        </div>
-      </div>
+      <PageHeader
+        title="Opportunities"
+        description="Deals moving through your pipeline."
+        actions={
+          <>
+            <nav aria-label="View" className="inline-flex rounded-lg bg-stone-100 p-1">
+              <Link href={tab("list")} className={seg(view === "list")} aria-current={view === "list" ? "page" : undefined}><Icon name="list" className="h-4 w-4" />List</Link>
+              <Link href={tab("board")} className={seg(view === "board")} aria-current={view === "board" ? "page" : undefined}><Icon name="board" className="h-4 w-4" />Board</Link>
+            </nav>
+            {can(ctx, "crm.export") && <a href="/api/export/opportunities" className={ui.btn} download><Icon name="download" className="h-4 w-4" />Export CSV</a>}
+          </>
+        }
+      />
 
       {pipelines.length > 1 && (
-        <nav aria-label="Pipelines" className="flex flex-wrap gap-2">
+        <nav aria-label="Pipelines" className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-stone-500">Pipeline</span>
           {pipelines.map((p) => (
-            <Link key={p.id} href={`/opportunities?${new URLSearchParams({ view, pipeline: p.id }).toString()}`} className={tabCls(p.id === pipeline?.id)}>
+            <Link key={p.id} href={`/opportunities?${new URLSearchParams({ view, pipeline: p.id }).toString()}`} className={pill(p.id === pipeline?.id)} aria-current={p.id === pipeline?.id ? "page" : undefined}>
               {p.name}
             </Link>
           ))}
@@ -87,15 +96,23 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
       )}
 
       {can(ctx, "crm.create") && (
-        <details className={ui.card}>
-          <summary className="cursor-pointer font-medium">＋ New opportunity</summary>
-          <div className="mt-3"><OpportunityCreateForm contacts={contacts} pipelines={pipelines} defs={oppDefs} team={team} /></div>
+        <details className={ui.cardFlush}>
+          <AddSummary>New opportunity</AddSummary>
+          <div className="border-t border-stone-200 p-5"><OpportunityCreateForm contacts={contacts} pipelines={pipelines} defs={oppDefs} team={team} /></div>
         </details>
       )}
 
-      <FilterBar entity="opportunity" />
-      <SearchBox q={q} placeholder="Search by title or contact" hidden={{ view, ...(pipeline ? { pipeline: pipeline.id } : {}) }} />
-      {stageFilter && <p className="text-sm">Filtered by stage · <Link href={tab(view).replace(/&?stage=[^&]*/, "")} className="underline">clear</Link></p>}
+      <div className="space-y-3">
+        <FilterBar entity="opportunity" />
+        <SearchBox q={q} placeholder="Search by title or contact" hidden={{ view, ...(pipeline ? { pipeline: pipeline.id } : {}) }} />
+        {stageFilter && (
+          <p className="flex flex-wrap items-center gap-2 text-sm text-stone-700">
+            <Icon name="filter" className="h-4 w-4 text-stone-500" />
+            Showing stage <strong className="text-stone-900">{stageName ?? "selected"}</strong>
+            <Link href={tab(view).replace(/&?stage=[^&]*/, "")} className={ui.link}>Show all stages</Link>
+          </p>
+        )}
+      </div>
 
       {view === "board" ? (
         <Board
@@ -104,20 +121,47 @@ export default async function OpportunitiesPage({ searchParams }: { searchParams
           canEdit={canEdit}
         />
       ) : items.length === 0 ? (
-        <p className={ui.muted}>No opportunities found.</p>
+        <EmptyState icon="target" title={q ? `No opportunities match “${q}”` : "No opportunities found"}>
+          {q || stageFilter ? "Try another search, or clear the stage filter." : "Create one from a contact page or with “New opportunity” above."}
+        </EmptyState>
       ) : (
-        <div className={`${ui.card} p-0`}>
-          <div className="hidden grid-cols-5 gap-3 border-b border-stone-200 px-4 py-2 text-xs font-semibold uppercase text-stone-600 md:grid">
-            <span>Title</span><span>Contact</span><span>Stage</span><span>Value</span><span>Owner</span>
-          </div>
-          <ul className="divide-y divide-stone-200">
+        <div className={ui.cardFlush}>
+          <table className="hidden w-full text-sm md:table">
+            <caption className="sr-only">Opportunities</caption>
+            <thead className="border-b border-stone-200 bg-stone-50/70">
+              <tr>
+                <th scope="col" className={ui.th}>Title</th>
+                <th scope="col" className={ui.th}>Contact</th>
+                <th scope="col" className={ui.th}>Stage</th>
+                <th scope="col" className={`${ui.th} !text-right`}>Value</th>
+                <th scope="col" className={ui.th}>Owner</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-stone-100">
+              {items.map((o) => (
+                <tr key={o.id} className={ui.row}>
+                  <td className="max-w-[18rem] px-4 py-3"><Link href={`/opportunities/${o.id}`} className="block truncate font-semibold text-stone-900 hover:text-emerald-800 hover:underline">{o.title}</Link></td>
+                  <td className="max-w-[12rem] truncate px-4 py-3 text-stone-700">{o.contactName}</td>
+                  <td className="px-4 py-3"><Badge tone={stageTone(o.stageKind)} icon={stageIcon(o.stageKind)}>{o.stageName}</Badge></td>
+                  <td className="whitespace-nowrap px-4 py-3 text-right font-semibold tabular-nums text-stone-900">{formatMoney(o.value, o.currency, o.valueMasked)}</td>
+                  <td className="whitespace-nowrap px-4 py-3 text-stone-700">{o.ownerId ? names.get(o.ownerId) ?? "—" : "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <ul className="divide-y divide-stone-100 md:hidden">
             {items.map((o) => (
-              <li key={o.id} className="grid gap-1 px-4 py-3 text-sm md:grid-cols-5 md:gap-3">
-                <Link href={`/opportunities/${o.id}`} className="min-w-0 break-words font-medium text-emerald-800 underline">{o.title}</Link>
-                <span className="min-w-0 break-words"><span className="text-stone-500 md:hidden">Contact: </span>{o.contactName}</span>
-                <span><span className="text-stone-500 md:hidden">Stage: </span>{o.stageKind === "WON" ? "🏆" : o.stageKind === "LOST" ? "✗" : "●"} {o.stageName}</span>
-                <span><span className="text-stone-500 md:hidden">Value: </span>{formatMoney(o.value, o.currency, o.valueMasked)}</span>
-                <span className="min-w-0 break-words"><span className="text-stone-500 md:hidden">Owner: </span>{o.ownerId ? names.get(o.ownerId) ?? "—" : "—"}</span>
+              <li key={o.id}>
+                <Link href={`/opportunities/${o.id}`} className="block space-y-1.5 px-4 py-3.5 text-sm hover:bg-stone-50">
+                  <span className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words font-semibold text-stone-900">{o.title}</span>
+                    <span className="shrink-0 font-semibold tabular-nums text-stone-900">{formatMoney(o.value, o.currency, o.valueMasked)}</span>
+                  </span>
+                  <span className="flex flex-wrap items-center gap-2 text-stone-600">
+                    <Badge tone={stageTone(o.stageKind)} icon={stageIcon(o.stageKind)}>{o.stageName}</Badge>
+                    <span className="break-words">{o.contactName}</span>
+                  </span>
+                </Link>
               </li>
             ))}
           </ul>

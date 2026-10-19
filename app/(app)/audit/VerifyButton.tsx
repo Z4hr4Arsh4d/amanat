@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useAction } from "@/components/ui/useAction";
 import { Spinner } from "@/components/ui/Spinner";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
+import { Notice } from "@/components/ui/Kit";
 import type { VerifyResult } from "@/lib/audit";
 import { verifyAudit } from "./actions";
 
@@ -20,20 +22,17 @@ export function VerifyButton() {
         className={ui.btnPrimary}
         onClick={() => run(() => verifyAudit(), { onSuccess: setRes })}
       >
-        {pending && <Spinner />} 🔒 Verify history
+        {pending ? <Spinner /> : <Icon name="shield" className="h-4 w-4" />}{pending ? "Checking…" : "Verify history"}
       </button>
       <div aria-live="polite">
         {res && res.ok && (
-          <p className="rounded-md border border-emerald-300 bg-emerald-50 p-3 text-sm font-medium text-emerald-900">
-            ✓ All {res.checked.toLocaleString()} entries intact. Nothing has been changed or removed.
-          </p>
+          <Notice tone="ok" role="status" title={`All ${res.checked.toLocaleString()} entries intact.`}>Nothing has been changed or removed.</Notice>
         )}
         {res && !res.ok && (
-          <div role="alert" className="space-y-1 rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900">
-            <p className="font-semibold">✗ {res.reason ?? `Entry #${res.brokenAt} has been altered.`}</p>
+          <Notice tone="bad" title={res.reason ?? `Entry #${res.brokenAt} has been altered.`}>
             {res.expected && <p>Expected hash <code>{short(res.expected)}</code>, found <code>{short(res.found)}</code>.</p>}
             <p>{res.checked.toLocaleString()} entries before it are intact. Everything from #{res.brokenAt} onward can&apos;t be trusted.</p>
-          </div>
+          </Notice>
         )}
       </div>
     </div>

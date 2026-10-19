@@ -7,6 +7,8 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { useAction } from "@/components/ui/useAction";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
+import { Spinner } from "@/components/ui/Spinner";
 import { fieldOptions, parseFilterParam, supportsCustomFields, type Filter, type FilterEntity, type FilterOp } from "@/lib/filters";
 import { createSavedList, getFilterChoices } from "@/app/(app)/lists/actions";
 
@@ -45,6 +47,8 @@ export function FilterBar({ entity }: { entity: FilterEntity }) {
   const { pending, run } = useAction();
   const [rows, setRows] = useState<Row[]>(() => toRows(parseFilterParam(search.get("f"))));
   const [listName, setListName] = useState("");
+  const active = parseFilterParam(search.get("f")).length;
+  const [open, setOpen] = useState(active > 0);
 
   const spec = (field: string) => fields.find((f) => f.field === field);
   const kindOf = (r: Row) => (r.field === CF ? "cf" : (spec(r.field)?.kind ?? "string"));
@@ -95,7 +99,7 @@ export function FilterBar({ entity }: { entity: FilterEntity }) {
       const [a, b] = Array.isArray(r.value) ? r.value : [r.value, ""];
       const t = kind === "date" ? "date" : "number";
       return (
-        <span className="flex gap-2">
+        <span className="flex min-w-0 gap-2">
           <input aria-label="From" type={t} className={ui.input} value={a} onChange={(e) => update(i, { value: [e.target.value, b] })} />
           <input aria-label="To" type={t} className={ui.input} value={b} onChange={(e) => update(i, { value: [a, e.target.value] })} />
         </span>
@@ -129,14 +133,27 @@ export function FilterBar({ entity }: { entity: FilterEntity }) {
   };
 
   return (
-    <section className={`${ui.card} space-y-3`} aria-label="Filters">
-      <h2 className="font-semibold text-stone-900">Filters</h2>
+    <section className={ui.cardFlush} aria-label="Filters">
+      <button
+        type="button" aria-expanded={open} aria-controls="filter-body" onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-stone-50"
+      >
+        <Icon name="filter" className="h-4 w-4 text-stone-500" />
+        <span className="flex-1 text-sm font-bold text-stone-900">
+          Filters
+          {active > 0 && <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-900">{active} active</span>}
+        </span>
+        <span className="hidden text-xs text-stone-500 sm:inline">{open ? "Hide" : "Narrow the list or save it"}</span>
+        <Icon name="chevronDown" className={`h-4 w-4 text-stone-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+      <div id="filter-body" className="space-y-4 border-t border-stone-200 px-5 py-4">
       {rows.length === 0 && <p className={ui.muted}>No filters yet. Add a criterion to narrow the list.</p>}
       <ul className="space-y-3">
         {rows.map((r, i) => (
-          <li key={i} className="grid gap-2 sm:grid-cols-[1fr_1fr_2fr_auto] sm:items-end">
-            <div>
-              <label htmlFor={`ff-${i}`} className="block text-xs font-medium text-stone-700">Field</label>
+          <li key={i} className="grid gap-2 rounded-lg bg-stone-50 p-3 sm:grid-cols-[1fr_1fr_2fr_auto] sm:items-end sm:bg-transparent sm:p-0">
+            <div className={ui.field}>
+              <label htmlFor={`ff-${i}`} className={ui.labelSm}>Field</label>
               <select id={`ff-${i}`} className={ui.input} value={r.field}
                 onChange={(e) => { const f = spec(e.target.value); update(i, { field: e.target.value, op: e.target.value === CF ? "eq" : (f?.ops[0] ?? "eq"), value: "" }); }}>
                 {visible.map((f) => <option key={f.field} value={f.field}>{f.label}</option>)}
@@ -146,39 +163,45 @@ export function FilterBar({ entity }: { entity: FilterEntity }) {
                 <input aria-label="Custom field key" className={`${ui.input} mt-1`} placeholder="field key, e.g. budget" value={r.cfKey} onChange={(e) => update(i, { cfKey: e.target.value })} />
               )}
             </div>
-            <div>
-              <label htmlFor={`fo-${i}`} className="block text-xs font-medium text-stone-700">Is</label>
+            <div className={ui.field}>
+              <label htmlFor={`fo-${i}`} className={ui.labelSm}>Is</label>
               <select id={`fo-${i}`} className={ui.input} value={r.op} onChange={(e) => update(i, { op: e.target.value as FilterOp, value: "" })}>
                 {opsOf(r).map((o) => <option key={o} value={o}>{opLabel(o, kindOf(r))}</option>)}
               </select>
             </div>
-            <div>
-              <label htmlFor={`fv-${i}`} className="block text-xs font-medium text-stone-700">Value</label>
+            <div className={ui.field}>
+              <label htmlFor={`fv-${i}`} className={ui.labelSm}>Value</label>
               {valueInput(r, i)}
             </div>
-            <button type="button" className={ui.btnDanger} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label={`Remove criterion ${i + 1}`}>Remove</button>
+            <button type="button" className={ui.btnDanger} onClick={() => setRows((rs) => rs.filter((_, j) => j !== i))} aria-label={`Remove criterion ${i + 1}`}>
+              <Icon name="trash" className="h-4 w-4" /><span className="sm:hidden">Remove</span>
+            </button>
           </li>
         ))}
       </ul>
-      <div className="flex flex-wrap items-end gap-2">
-        <button type="button" className={ui.btn} onClick={addRow} disabled={rows.length >= 12}>Add criterion</button>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className={ui.btn} onClick={addRow} disabled={rows.length >= 12}><Icon name="plus" className="h-4 w-4" />Add criterion</button>
         <button type="button" className={ui.btnPrimary} onClick={() => apply(filters())}>Apply filters</button>
-        <button type="button" className={ui.btn} onClick={() => { setRows([]); apply([]); }} disabled={rows.length === 0 && !search.get("f")}>Clear</button>
+        <button type="button" className={ui.btnGhost} onClick={() => { setRows([]); apply([]); }} disabled={rows.length === 0 && !search.get("f")}>Clear all</button>
       </div>
       <form
-        className="flex flex-wrap items-end gap-2 border-t border-stone-200 pt-3"
+        className="flex flex-col gap-2 border-t border-stone-200 pt-4 sm:flex-row sm:items-end"
         onSubmit={(e) => {
           e.preventDefault();
           const list = filters();
           run(() => createSavedList({ name: listName, entity, filters: list }), { success: "List saved. Find it under Saved lists.", onSuccess: () => setListName("") });
         }}
       >
-        <div>
-          <label htmlFor="list-name" className="block text-xs font-medium text-stone-700">List name</label>
-          <input id="list-name" className={ui.input} value={listName} onChange={(e) => setListName(e.target.value)} maxLength={80} placeholder="Hot leads in Lahore" />
+        <div className={`${ui.field} sm:w-72`}>
+          <label htmlFor="list-name" className={ui.labelSm}>Save these filters as a list</label>
+          <input id="list-name" className={ui.input} value={listName} onChange={(e) => setListName(e.target.value)} maxLength={80} placeholder="e.g. Hot leads in Lahore" />
         </div>
-        <button type="submit" className={ui.btn} disabled={pending || listName.trim().length < 2 || rows.length === 0}>{pending ? "Saving…" : "Save as list"}</button>
+        <button type="submit" className={ui.btn} disabled={pending || listName.trim().length < 2 || rows.length === 0}>
+          {pending ? <Spinner /> : <Icon name="bookmark" className="h-4 w-4" />}{pending ? "Saving…" : "Save as list"}
+        </button>
       </form>
+      </div>
+      )}
     </section>
   );
 }

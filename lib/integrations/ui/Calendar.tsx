@@ -3,6 +3,9 @@
 import { useEffect, useId, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 import { bookAppointmentAction, cancelAppointmentAction, rescheduleAppointmentAction } from "@/app/(app)/settings/calendar/actions";
+import { Icon } from "@/components/ui/Icon";
+import { EmptyState, Notice } from "@/components/ui/Kit";
+import { ui } from "@/components/ui/styles";
 import { Chip } from "./StatusChip";
 import { Spinner } from "./Spinner";
 import { useRun } from "./useRun";
@@ -17,7 +20,7 @@ const fetchJson = async <T,>(url: string): Promise<T> => {
 type Employee = { id: string; name: string; timezone: string; offset: string; bookable: boolean; why: string | null };
 type Slot = { ok: true; label: string; conflicts: string[]; canOverride: boolean; warning: string | null } | { ok: false; error: string };
 
-const input = "w-full rounded border border-stone-300 bg-white px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-700";
+const input = ui.input;
 const MINUTES = [15, 30, 45, 60, 90, 120];
 
 /** Today's date in a zone, as YYYY-MM-DD. */
@@ -38,25 +41,25 @@ function useSlotCheck(params: Record<string, string> | null) {
 
 function SlotStatus({ slot, loading, override, setOverride }: { slot?: Slot; loading: boolean; override: boolean; setOverride: (v: boolean) => void }) {
   const id = useId();
-  if (loading && !slot) return <p className="text-sm text-stone-600"><Spinner /> Checking the calendar…</p>;
+  if (loading && !slot) return <p className="flex items-center gap-2 text-sm text-stone-600"><Spinner /> Checking the calendar…</p>;
   if (!slot) return null;
-  if (!slot.ok) return <p role="alert" className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-900"><span aria-hidden="true">⚠ </span>{slot.error}</p>;
+  if (!slot.ok) return <Notice tone="bad">{slot.error}</Notice>;
   return (
-    <div className="space-y-1 text-sm" aria-live="polite">
-      <p><span className="text-stone-600">Slot: </span>{slot.label}</p>
-      {slot.warning && <p className="text-amber-900"><span aria-hidden="true">⚠ </span>{slot.warning}</p>}
+    <div className="space-y-2 text-sm" aria-live="polite">
+      <p className="rounded-lg bg-stone-50 px-3 py-2"><span className="text-stone-600">Slot: </span><span className="font-semibold text-stone-900">{slot.label}</span></p>
+      {slot.warning && <Notice tone="warn">{slot.warning}</Notice>}
       {slot.conflicts.length === 0 ? (
-        <p className="text-emerald-900"><span aria-hidden="true">✓ </span>Free at this time.</p>
+        <p className="flex items-center gap-1.5 font-semibold text-emerald-800"><Icon name="checkCircle" className="h-4 w-4" />Free at this time.</p>
       ) : (
-        <div className="space-y-1 rounded border border-amber-300 bg-amber-50 p-2 text-amber-900">
-          {slot.conflicts.map((c) => <p key={c}><span aria-hidden="true">⚠ </span>{c}. Pick another time.</p>)}
+        <Notice tone="warn">
+          {slot.conflicts.map((c) => <p key={c}>{c}. Pick another time.</p>)}
           {slot.canOverride && (
-            <label htmlFor={id} className="flex items-center gap-2">
-              <input id={id} type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} className="h-4 w-4" />
+            <label htmlFor={id} className="mt-2 flex items-center gap-2 font-semibold">
+              <input id={id} type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} className={ui.check} />
               Book anyway (managers only)
             </label>
           )}
-        </div>
+        </Notice>
       )}
     </div>
   );
@@ -78,57 +81,56 @@ export function BookAppointmentForm({ contactId, opportunityId }: { contactId: s
   const slot = useSlotCheck(emp?.bookable && day && time ? { userId, date: day, time, minutes } : null);
   useEffect(() => setOverride(false), [userId, day, time, minutes]);
 
-  if (error && /permission/i.test((error as Error).message)) return <p className="text-sm text-stone-600">Booking appointments needs the “Book appointments” permission. Ask an admin if you need it.</p>;
-  if (error) return <p role="alert" className="text-sm text-red-900"><span aria-hidden="true">⚠ </span>{(error as Error).message}</p>;
+  if (error && /permission/i.test((error as Error).message)) return <p className={ui.muted}>Booking appointments needs the “Book appointments” permission. Ask an admin if you need it.</p>;
+  if (error) return <Notice tone="bad">{(error as Error).message}</Notice>;
   const s = slot.data;
   const blocked = !emp?.bookable || !s || !s.ok || (s.conflicts.length > 0 && !override) || slot.isValidating;
 
   return (
-    <form className="space-y-3 rounded-lg border border-stone-200 bg-white p-3"
+    <form className="space-y-4"
       onSubmit={async (e) => {
         e.preventDefault();
         const r = await run("book", () => bookAppointmentAction({ contactId, opportunityId, userId, date: day, time, minutes, note, override }));
         if (r.ok) { setNote(""); mutate((k) => typeof k === "string" && k.startsWith("/settings/calendar/data/")); }
       }}>
-      <div className="space-y-1">
-        <label htmlFor={ids.emp} className="block text-sm font-medium">Employee</label>
+      <div className={ui.field}>
+        <label htmlFor={ids.emp} className={ui.label}>Employee</label>
         <select id={ids.emp} value={userId} onChange={(e) => { setUserId(e.target.value); setDate(""); }} className={input} aria-describedby={`${ids.emp}-h`}>
           <option value="">{data ? "Choose who meets the customer…" : "Loading…"}</option>
           {data?.items.map((u) => (
             <option key={u.id} value={u.id} disabled={!u.bookable}>{u.name}{u.why ? ` — ${u.why}` : ""}</option>
           ))}
         </select>
-        <p id={`${ids.emp}-h`} className="text-xs text-stone-600">Employees without a connected calendar cannot be booked; they can connect it on My calendar.</p>
+        <p id={`${ids.emp}-h`} className={ui.hint}>Employees without a connected calendar cannot be booked; they can connect it on My calendar.</p>
       </div>
       {emp && (
         <>
-          <p className="text-sm font-medium">Times in {emp.timezone} ({emp.offset}), {emp.name}&apos;s time zone</p>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <div className="space-y-1">
-              <label htmlFor={ids.date} className="block text-sm font-medium">Date</label>
+          <p className="flex items-center gap-1.5 text-xs font-semibold text-stone-600"><Icon name="globe" className="h-3.5 w-3.5" />Times in {emp.timezone} ({emp.offset}), {emp.name}&apos;s time zone</p>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className={ui.field}>
+              <label htmlFor={ids.date} className={ui.label}>Date</label>
               <input id={ids.date} type="date" value={day} onChange={(e) => setDate(e.target.value)} className={input} />
             </div>
-            <div className="space-y-1">
-              <label htmlFor={ids.time} className="block text-sm font-medium">Start time</label>
+            <div className={ui.field}>
+              <label htmlFor={ids.time} className={ui.label}>Start time</label>
               <input id={ids.time} type="time" step={900} value={time} onChange={(e) => setTime(e.target.value)} className={input} />
             </div>
-            <div className="space-y-1">
-              <label htmlFor={ids.len} className="block text-sm font-medium">Length</label>
+            <div className={ui.field}>
+              <label htmlFor={ids.len} className={ui.label}>Length</label>
               <select id={ids.len} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={input}>
                 {MINUTES.map((m) => <option key={m} value={m}>{m < 60 ? `${m} min` : `${m / 60} h${m % 60 ? " 30" : ""}`}</option>)}
               </select>
             </div>
           </div>
-          <div className="space-y-1">
-            <label htmlFor={ids.note} className="block text-sm font-medium">Note for the calendar event (optional)</label>
+          <div className={ui.field}>
+            <label htmlFor={ids.note} className={ui.label}>Note for the calendar event <span className="font-normal text-stone-500">(optional)</span></label>
             <input id={ids.note} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Site visit, bring roof measurements" className={input} />
           </div>
           <SlotStatus slot={s} loading={slot.isLoading} override={override} setOverride={setOverride} />
         </>
       )}
-      <button type="submit" disabled={!!pending || blocked}
-        className="inline-flex items-center gap-2 rounded bg-emerald-800 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 disabled:opacity-60">
-        {pending && <Spinner />}{pending ? "Booking…" : "Book appointment"}
+      <button type="submit" disabled={!!pending || blocked} className={ui.btnPrimary}>
+        {pending ? <Spinner /> : <Icon name="calendar" className="h-4 w-4" />}{pending ? "Booking…" : "Book appointment"}
       </button>
     </form>
   );
@@ -155,19 +157,19 @@ function Reschedule({ a, canOverride, onDone }: { a: Appt; canOverride: boolean;
   const [override, setOverride] = useState(false);
   const { pending, run } = useRun();
   return (
-    <form className="mt-2 space-y-2 rounded border border-stone-200 bg-stone-50 p-2"
+    <form className="mt-3 space-y-3 rounded-lg border border-stone-200 bg-stone-50 p-3"
       onSubmit={async (e) => { e.preventDefault(); const r = await run("r", () => rescheduleAppointmentAction({ appointmentId: a.id, date, time, minutes, override })); if (r.ok) onDone(); }}>
-      <p className="text-xs font-medium">New time in {a.timezone} ({a.employee}&apos;s time zone)</p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        <div><label htmlFor={ids.date} className="block text-xs font-medium">Date</label><input id={ids.date} type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} /></div>
-        <div><label htmlFor={ids.time} className="block text-xs font-medium">Start time</label><input id={ids.time} type="time" step={900} value={time} onChange={(e) => setTime(e.target.value)} className={input} /></div>
-        <div><label htmlFor={ids.len} className="block text-xs font-medium">Length</label>
+      <p className="text-xs font-semibold text-stone-700">New time in {a.timezone} ({a.employee}&apos;s time zone)</p>
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className={ui.field}><label htmlFor={ids.date} className={ui.labelSm}>Date</label><input id={ids.date} type="date" value={date} onChange={(e) => setDate(e.target.value)} className={input} /></div>
+        <div className={ui.field}><label htmlFor={ids.time} className={ui.labelSm}>Start time</label><input id={ids.time} type="time" step={900} value={time} onChange={(e) => setTime(e.target.value)} className={input} /></div>
+        <div className={ui.field}><label htmlFor={ids.len} className={ui.labelSm}>Length</label>
           <select id={ids.len} value={minutes} onChange={(e) => setMinutes(e.target.value)} className={input}>{MINUTES.map((m) => <option key={m} value={m}>{m} min</option>)}</select></div>
       </div>
       {canOverride && (
-        <label htmlFor={ids.ov} className="flex items-center gap-2 text-xs"><input id={ids.ov} type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} className="h-4 w-4" />Move even if the employee is busy (managers only)</label>
+        <label htmlFor={ids.ov} className="flex items-center gap-2 text-xs font-medium text-stone-700"><input id={ids.ov} type="checkbox" checked={override} onChange={(e) => setOverride(e.target.checked)} className={ui.check} />Move even if the employee is busy (managers only)</label>
       )}
-      <button type="submit" disabled={!!pending} className="inline-flex items-center gap-1 rounded bg-emerald-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-emerald-900 focus:outline-none focus:ring-2 focus:ring-emerald-700 disabled:opacity-60">
+      <button type="submit" disabled={!!pending} className={ui.btnPrimarySm}>
         {pending && <Spinner />}Save new time
       </button>
     </form>
@@ -178,38 +180,37 @@ export function AppointmentList({ query, emptyText }: { query: Record<string, st
   const { data, error, mutate } = useSWR<ApptList>(`/settings/calendar/data/appointments?${new URLSearchParams(query)}`, fetchJson, { refreshInterval: 3000 });
   const [editing, setEditing] = useState<string | null>(null);
   const { pending, run } = useRun();
-  if (error) return <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900"><span aria-hidden="true">⚠ </span>{(error as Error).message}</p>;
-  if (!data) return <p className="text-sm text-stone-600"><Spinner /> Loading appointments…</p>;
+  if (error) return <Notice tone="bad">{(error as Error).message}</Notice>;
+  if (!data) return <p className="flex items-center gap-2 text-sm text-stone-600"><Spinner /> Loading appointments…</p>;
+  if (data.items.length === 0) return <EmptyState compact icon="calendar" title={emptyText ?? "No appointments yet."} />;
   return (
-    <ul className="space-y-2">
+    <ul className="divide-y divide-stone-100">
       {data.items.map((a) => (
-        <li key={a.id} className={`rounded-lg border bg-white p-3 text-sm ${a.status === "CANCELLED" ? "border-stone-200 opacity-80" : "border-stone-200"}`}>
+        <li key={a.id} className={`py-3.5 text-sm first:pt-1 last:pb-1 ${a.status === "CANCELLED" ? "opacity-75" : ""}`}>
           <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className={`font-medium ${a.status === "CANCELLED" ? "line-through" : ""}`}>{a.viewerLabel}</p>
-              {a.employeeLabel && <p className="text-xs text-stone-700">{a.employeeLabel}</p>}
-              <p className="text-stone-700">{a.contact} · with {a.employee} · booked by {a.bookedBy}{a.demo ? " · demo calendar" : ""}</p>
-              {a.googleLink && a.status !== "CANCELLED" && <a href={a.googleLink} target="_blank" rel="noreferrer" className="text-xs text-emerald-800 underline">Open in Google Calendar</a>}
+            <div className="min-w-0 space-y-0.5">
+              <p className={`font-bold text-stone-900 ${a.status === "CANCELLED" ? "line-through" : ""}`}>{a.viewerLabel}</p>
+              {a.employeeLabel && <p className="text-xs text-stone-600">{a.employeeLabel}</p>}
+              <p className="text-stone-600">{a.contact} · with {a.employee} · booked by {a.bookedBy}{a.demo ? " · demo calendar" : ""}</p>
+              {a.googleLink && a.status !== "CANCELLED" && <a href={a.googleLink} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 hover:underline">Open in Google Calendar<Icon name="external" className="h-3 w-3" /></a>}
             </div>
             {a.status === "CANCELLED" ? <Chip tone="off">Cancelled</Chip> : !a.upcoming ? <Chip tone="info">Past</Chip> : a.status === "RESCHEDULED" ? <Chip tone="warn">Rescheduled</Chip> : <Chip tone="ok">Booked</Chip>}
           </div>
           {data.canChange && a.upcoming && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button type="button" onClick={() => setEditing(editing === a.id ? null : a.id)} aria-expanded={editing === a.id}
-                className="rounded border border-stone-300 bg-white px-2 py-1 text-xs font-medium hover:bg-stone-100 focus:outline-none focus:ring-2 focus:ring-emerald-700">
-                {editing === a.id ? "Close" : "Reschedule"}
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setEditing(editing === a.id ? null : a.id)} aria-expanded={editing === a.id} className={ui.btnSm}>
+                <Icon name={editing === a.id ? "x" : "clock"} className="h-3.5 w-3.5" />{editing === a.id ? "Close" : "Reschedule"}
               </button>
               <button type="button" disabled={!!pending}
                 onClick={() => { if (confirm("Cancel this appointment? It will be removed from the employee's calendar.")) run(a.id, () => cancelAppointmentAction(a.id), { onOk: () => mutate() }); }}
-                className="inline-flex items-center gap-1 rounded border border-red-300 bg-white px-2 py-1 text-xs font-medium text-red-800 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-700 disabled:opacity-60">
-                {pending === a.id && <Spinner />}Cancel appointment
+                className={ui.btnDangerSm}>
+                {pending === a.id ? <Spinner /> : <Icon name="xCircle" className="h-3.5 w-3.5" />}Cancel appointment
               </button>
             </div>
           )}
           {editing === a.id && <Reschedule a={a} canOverride={data.canOverride} onDone={() => { setEditing(null); mutate(); }} />}
         </li>
       ))}
-      {data.items.length === 0 && <li className="rounded border border-dashed border-stone-300 p-4 text-center text-sm text-stone-600">{emptyText ?? "No appointments yet."}</li>}
     </ul>
   );
 }

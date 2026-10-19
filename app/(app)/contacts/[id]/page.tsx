@@ -8,6 +8,8 @@ import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { FieldValues } from "@/components/ui/DynamicFields";
 import { Timeline } from "@/components/ui/Timeline";
 import { ui } from "@/components/ui/styles";
+import { Icon } from "@/components/ui/Icon";
+import { AddSummary, Avatar, Badge, Detail, EmptyState, Panel } from "@/components/ui/Kit";
 import { ConversationSlot } from "@/components/slots/ConversationSlot";
 import { PaymentsSlot } from "@/components/slots/PaymentsSlot";
 import { AppointmentsSlot } from "@/components/slots/AppointmentsSlot";
@@ -42,32 +44,41 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
   const cf = (c.customFields ?? {}) as Record<string, unknown>;
   const company = c.company && !c.company.deletedAt ? c.company : null;
 
+  const stageIcon = (kind: string) => (kind === "WON" ? "trophy" : kind === "LOST" ? "xCircle" : "dot") as "trophy" | "xCircle" | "dot";
+  const stageTone = (kind: string) => (kind === "WON" ? "ok" : kind === "LOST" ? "bad" : "neutral") as "ok" | "bad" | "neutral";
+
   return (
     <article className="space-y-6">
       <AutoRefresh />
-      <p className="text-sm"><Link href="/contacts" className="text-emerald-800 underline">← Contacts</Link></p>
+      <Link href="/contacts" className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 text-sm font-semibold text-stone-600 hover:text-stone-900">
+        <Icon name="arrowLeft" className="h-4 w-4" /> Contacts
+      </Link>
 
-      <header className={`${ui.card} space-y-3`}>
-        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
-            <h1 className={`${ui.h1} break-words`}>{c.name}</h1>
-            <p className="text-sm text-stone-600">
-              {company ? <Link href={`/contacts?company=${company.id}`} className="underline">{company.name}</Link> : "No company"}
-            </p>
+      <header className={`${ui.card} space-y-5`}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-center gap-4">
+            <Avatar name={c.name} size="lg" />
+            <div className="min-w-0">
+              <h1 className={`${ui.h1} break-words`}>{c.name}</h1>
+              <p className="mt-0.5 flex items-center gap-1.5 text-sm text-stone-600">
+                <Icon name="building" className="h-4 w-4 text-stone-400" />
+                {company ? <Link href={`/contacts?company=${company.id}`} className={ui.link}>{company.name}</Link> : "No company"}
+              </p>
+            </div>
           </div>
           {c.optedOut && (
-            <span className="self-start rounded bg-red-100 px-2 py-1 text-sm font-medium text-red-800">
-              ⊘ Opted out{c.optedOutAt ? ` on ${c.optedOutAt.toLocaleDateString("en-GB", { timeZone: ctx.timezone })}` : ""}
-            </span>
+            <Badge tone="bad" icon="ban" className="self-start !px-2.5 !py-1 !text-[13px]">
+              Opted out{c.optedOutAt ? ` on ${c.optedOutAt.toLocaleDateString("en-GB", { timeZone: ctx.timezone })}` : ""}
+            </Badge>
           )}
         </div>
-        <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-          <div className="min-w-0"><dt className="text-stone-600">Phone</dt><dd className="break-all font-medium">{c.phone ?? "—"}</dd></div>
-          <div className="min-w-0"><dt className="text-stone-600">Email</dt><dd className="break-all font-medium">{c.email ?? "—"}</dd></div>
-          <div className="min-w-0"><dt className="text-stone-600">Assigned to</dt><dd className="font-medium">👤 {c.ownerId ? names.get(c.ownerId) ?? "Former user" : "Nobody"}</dd></div>
-          <div className="min-w-0"><dt className="text-stone-600">Tags</dt><dd className="break-words font-medium">{c.tags.length ? c.tags.map((t) => `#${t}`).join(" ") : "—"}</dd></div>
+        <dl className="grid gap-x-6 gap-y-4 border-t border-stone-100 pt-5 sm:grid-cols-2 lg:grid-cols-4">
+          <Detail label="Phone" icon="phone">{c.phone ? <span className="break-all tabular-nums">{c.phone}</span> : "—"}</Detail>
+          <Detail label="Email" icon="mail">{c.email ? <a href={`mailto:${c.email}`} className="break-all hover:underline">{c.email}</a> : "—"}</Detail>
+          <Detail label="Assigned to" icon="user">{c.ownerId ? names.get(c.ownerId) ?? "Former user" : "Nobody"}</Detail>
+          <Detail label="Tags" icon="tag">{c.tags.length ? c.tags.map((t) => `#${t}`).join(" ") : "—"}</Detail>
         </dl>
-        <FieldValues defs={defs} values={cf} />
+        {defs.length > 0 && <div className="border-t border-stone-100 pt-5"><FieldValues defs={defs} values={cf} /></div>}
         <ContactActions
           initial={{
             id: c.id, version: c.version, name: c.name, email: c.email ?? "", phone: c.phone ?? "", companyId: company?.id ?? "",
@@ -78,40 +89,53 @@ export default async function ContactPage({ params }: { params: Promise<{ id: st
         />
       </header>
 
-      <LeadSlot contactId={c.id} />
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+        <div className="min-w-0 space-y-6">
+          <Panel id="opps" title={<>Opportunities <span className="font-semibold tabular-nums text-stone-500">({opps.length})</span></>} flush>
+            {opps.length === 0 ? (
+              <div className="p-5"><EmptyState compact icon="target" title="No opportunities yet">Create one below when this contact is interested in a deal.</EmptyState></div>
+            ) : (
+              <ul className="divide-y divide-stone-100">
+                {opps.map((o) => {
+                  const s = serializeOpportunity(o, ctx);
+                  return (
+                    <li key={o.id}>
+                      <Link href={`/opportunities/${o.id}`} className="flex flex-col gap-1.5 px-5 py-3.5 text-sm transition-colors hover:bg-stone-50 sm:flex-row sm:items-center sm:justify-between">
+                        <span className="break-words font-semibold text-stone-900">{o.title}</span>
+                        <span className="flex flex-wrap items-center gap-3">
+                          <Badge tone={stageTone(o.stage.kind)} icon={stageIcon(o.stage.kind)}>{o.stage.name}</Badge>
+                          <span className="font-semibold tabular-nums text-stone-900">{formatMoney(s.value, s.currency, s.valueMasked)}</span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {can(ctx, "crm.create") && (
+              <details className="border-t border-stone-200">
+                <AddSummary>New opportunity for {c.name}</AddSummary>
+                <div className="border-t border-stone-100 p-5"><OpportunityCreateForm contactId={c.id} pipelines={pipelines} defs={oppDefs} team={team} goToNew={false} /></div>
+              </details>
+            )}
+          </Panel>
 
-      <section aria-labelledby="opps-h" className={`${ui.card} space-y-3`}>
-        <h2 id="opps-h" className="text-lg font-semibold">Opportunities ({opps.length})</h2>
-        {opps.length === 0 ? <p className={ui.muted}>No opportunities yet.</p> : (
-          <ul className="divide-y divide-stone-200">
-            {opps.map((o) => {
-              const s = serializeOpportunity(o, ctx);
-              return (
-                <li key={o.id} className="flex flex-col gap-1 py-2 text-sm sm:flex-row sm:justify-between">
-                  <Link href={`/opportunities/${o.id}`} className="break-words font-medium text-emerald-800 underline">{o.title}</Link>
-                  <span className="text-stone-700">{o.stage.kind === "WON" ? "🏆" : o.stage.kind === "LOST" ? "✗" : "●"} {o.stage.name} · {formatMoney(s.value, s.currency, s.valueMasked)}</span>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        {can(ctx, "crm.create") && (
-          <details>
-            <summary className="cursor-pointer text-sm font-medium text-emerald-800">＋ New opportunity for {c.name}</summary>
-            <div className="mt-3"><OpportunityCreateForm contactId={c.id} pipelines={pipelines} defs={oppDefs} team={team} goToNew={false} /></div>
-          </details>
-        )}
-      </section>
+          <ConversationSlot contactId={c.id} />
 
-      <ConversationSlot contactId={c.id} />
-      <PaymentsSlot contactId={c.id} />
-      <AppointmentsSlot contactId={c.id} />
+          <Panel id="tl" title="History" description="Notes, messages, stage changes and edits, newest first.">
+            <div className="space-y-6">
+              {can(ctx, "crm.edit") && <NoteForm contactId={c.id} />}
+              <Timeline entries={entries} tz={ctx.timezone} />
+            </div>
+          </Panel>
+        </div>
 
-      <section aria-labelledby="tl-h" className={`${ui.card} space-y-4`}>
-        <h2 id="tl-h" className="text-lg font-semibold">History</h2>
-        {can(ctx, "crm.edit") && <NoteForm contactId={c.id} />}
-        <Timeline entries={entries} tz={ctx.timezone} />
-      </section>
+        <aside className="min-w-0 space-y-6" aria-label="Lead, payments and appointments">
+          <LeadSlot contactId={c.id} />
+          <PaymentsSlot contactId={c.id} />
+          <AppointmentsSlot contactId={c.id} />
+        </aside>
+      </div>
     </article>
   );
 }

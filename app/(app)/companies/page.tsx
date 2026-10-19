@@ -6,7 +6,7 @@ import { NoAccess } from "@/components/ui/NoAccess";
 import { Pagination } from "@/components/ui/Pagination";
 import { SearchBox } from "@/components/ui/SearchBox";
 import { AutoRefresh } from "@/components/ui/AutoRefresh";
-import { ui } from "@/components/ui/styles";
+import { PageHeader } from "@/components/ui/Kit";
 import { activeFields } from "@/lib/crm/fields";
 import { PAGE_SIZE, pageFrom, qFrom } from "@/lib/crm/people";
 import { CompaniesClient } from "./CompaniesClient";
@@ -28,17 +28,15 @@ export default async function CompaniesPage({ searchParams }: { searchParams: Pr
     activeFields(db, "COMPANY"),
   ]);
   return (
-    <section className="space-y-4">
+    <section className="space-y-6">
       <AutoRefresh />
-      <div>
-        <h1 className={ui.h1}>Companies</h1>
-        <p className={ui.muted}>Businesses your contacts belong to.</p>
-      </div>
-      <SearchBox q={q} placeholder="Search companies by name" />
+      <PageHeader title="Companies" description="Businesses your contacts belong to." />
       <CompaniesClient
         rows={rows.map((r) => ({ id: r.id, name: r.name, version: r.version, contacts: r._count.contacts, customFields: (r.customFields ?? {}) as Record<string, unknown> }))}
         defs={defs}
         perms={{ create: can(ctx, "crm.create"), edit: can(ctx, "crm.edit"), del: can(ctx, "crm.delete") }}
+        search={<SearchBox q={q} placeholder="Search companies by name" />}
+        q={q}
       />
       <Pagination page={page} total={total} pageSize={PAGE_SIZE} basePath="/companies" params={q ? { q } : {}} />
     </section>

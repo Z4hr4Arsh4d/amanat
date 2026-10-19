@@ -32,7 +32,7 @@ export function OpportunityCreateForm({ contactId, contacts, pipelines, defs, te
 
   return (
     <form
-      className="space-y-3"
+      className="space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
         run(() => createOpportunity({ contactId: contact, pipelineId, title, value: value || 0, currency, ownerId: ownerId || null, customFields: cf }), {
@@ -44,9 +44,9 @@ export function OpportunityCreateForm({ contactId, contacts, pipelines, defs, te
         });
       }}
     >
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-4 sm:grid-cols-2">
         {!contactId && (
-          <div className="space-y-1 sm:col-span-2">
+          <div className={`${ui.field} sm:col-span-2`}>
             <label htmlFor="op-contact" className={ui.label}>Contact</label>
             <select id="op-contact" required value={contact} onChange={(e) => setContact(e.target.value)} className={ui.input}>
               <option value="">— Choose a contact —</option>
@@ -54,29 +54,29 @@ export function OpportunityCreateForm({ contactId, contacts, pipelines, defs, te
             </select>
           </div>
         )}
-        <div className="space-y-1 sm:col-span-2">
+        <div className={`${ui.field} sm:col-span-2`}>
           <label htmlFor="op-title" className={ui.label}>Title</label>
           <input id="op-title" required value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. 10kW rooftop system" className={ui.input} />
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor="op-pipeline" className={ui.label}>Pipeline</label>
           <select id="op-pipeline" value={pipelineId} onChange={(e) => { setPipelineId(e.target.value); setCf({}); }} className={ui.input}>
             {pipelines.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
           </select>
-          {firstStage && <p className="text-xs text-stone-600">Starts in “{firstStage.name}”.</p>}
+          {firstStage && <p className={ui.hint}>Starts in “{firstStage.name}”.</p>}
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor="op-owner" className={ui.label}>Owner</label>
           <select id="op-owner" value={ownerId} onChange={(e) => setOwnerId(e.target.value)} className={ui.input}>
             <option value="">— Me —</option>
             {team.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor="op-value" className={ui.label}>Value</label>
-          <input id="op-value" type="number" min="0" step="any" value={value} onChange={(e) => setValue(e.target.value)} className={ui.input} />
+          <input id="op-value" type="number" min="0" step="any" value={value} onChange={(e) => setValue(e.target.value)} placeholder="0" className={`${ui.input} tabular-nums`} />
         </div>
-        <div className="space-y-1">
+        <div className={ui.field}>
           <label htmlFor="op-currency" className={ui.label}>Currency</label>
           <select id="op-currency" value={currency} onChange={(e) => setCurrency(e.target.value)} className={ui.input}>
             <option value="PKR">PKR</option>
@@ -85,7 +85,7 @@ export function OpportunityCreateForm({ contactId, contacts, pipelines, defs, te
         </div>
       </div>
       <DynamicFields defs={fieldDefs} values={cf} onChange={(k, v) => setCf((p) => ({ ...p, [k]: v }))} idPrefix="op-new" required={firstStage?.requiredFieldIds ?? []} />
-      <button disabled={pending} className={ui.btnPrimary}>{pending && <Spinner />} Create opportunity</button>
+      <div className="border-t border-stone-100 pt-4"><button disabled={pending} className={ui.btnPrimary}>{pending && <Spinner />}{pending ? "Creating…" : "Create opportunity"}</button></div>
     </form>
   );
 }

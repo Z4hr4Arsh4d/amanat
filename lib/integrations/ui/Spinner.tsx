@@ -1,4 +1,6 @@
-// P3 owns.
+// P3 owns. Same spinner as the rest of the app, slightly smaller for inline use.
+import { Spinner as Base } from "@/components/ui/Spinner";
+
 export function Spinner() {
-  return <span aria-hidden="true" className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-current border-t-transparent align-[-2px]" />;
+  return <Base className="h-3.5 w-3.5 align-[-2px]" />;
 }

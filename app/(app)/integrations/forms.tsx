@@ -5,22 +5,23 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useRun } from "@/lib/integrations/ui/useRun";
 import { Spinner } from "@/lib/integrations/ui/Spinner";
+import { Icon } from "@/components/ui/Icon";
+import { ui } from "@/components/ui/styles";
 import { disconnectAction, prepareWebhookAction, saveMetaAction, saveStripeAction, saveTwilioAction, setWebchatAction, testConnectionAction } from "./actions";
 
-const input = "w-full min-w-0 rounded border border-stone-300 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-700";
-const btn = "inline-flex items-center gap-2 rounded px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-700 disabled:opacity-60";
-const primary = `${btn} bg-emerald-800 text-white hover:bg-emerald-900`;
-const secondary = `${btn} border border-stone-300 bg-white hover:bg-stone-100`;
-const danger = `${btn} border border-red-300 bg-white text-red-800 hover:bg-red-50`;
+const input = ui.input;
+const primary = ui.btnPrimary;
+const secondary = ui.btn;
+const danger = ui.btnDanger;
 
 function Field(props: { label: string; name: string; type?: string; placeholder?: string; defaultValue?: string; hint?: string; autoComplete?: string }) {
   const id = useId();
   return (
-    <div className="space-y-1">
-      <label htmlFor={id} className="block text-sm font-medium">{props.label}</label>
+    <div className={ui.field}>
+      <label htmlFor={id} className={ui.label}>{props.label}</label>
       <input id={id} name={props.name} type={props.type ?? "text"} placeholder={props.placeholder} defaultValue={props.defaultValue}
         autoComplete={props.autoComplete ?? "off"} spellCheck={false} className={input} aria-describedby={props.hint ? `${id}-h` : undefined} />
-      {props.hint && <p id={`${id}-h`} className="text-xs text-stone-600">{props.hint}</p>}
+      {props.hint && <p id={`${id}-h`} className={ui.hint}>{props.hint}</p>}
     </div>
   );
 }
@@ -29,10 +30,10 @@ export function TwilioForm({ connected, initial }: { connected: boolean; initial
   const [open, setOpen] = useState(!connected);
   const { pending, run } = useRun();
   const router = useRouter();
-  if (!open) return <button type="button" className={secondary} onClick={() => setOpen(true)}>Edit Twilio settings</button>;
+  if (!open) return <button type="button" className={secondary} onClick={() => setOpen(true)}><Icon name="pencil" className="h-4 w-4" />Edit Twilio settings</button>;
   return (
     <form
-      className="space-y-3 rounded border border-stone-200 p-3"
+      className="space-y-4 rounded-xl border border-stone-200 bg-stone-50/60 p-4"
       onSubmit={async (e) => {
         e.preventDefault();
         const form = e.currentTarget;
@@ -41,7 +42,7 @@ export function TwilioForm({ connected, initial }: { connected: boolean; initial
         if (r.ok) { form.reset(); setOpen(false); router.refresh(); }
       }}
     >
-      <p className="text-sm text-stone-700">Find these on the Twilio console home page. We check them with Twilio before saving.</p>
+      <p className="text-sm text-stone-600">Find these on the Twilio console home page. We check them with Twilio before saving.</p>
       <Field label="Account SID" name="accountSid" placeholder="AC…" hint="Starts with AC, 34 characters." />
       <Field label="Auth Token" name="authToken" type="password" placeholder={connected ? "Leave blank to keep the saved token" : "32 characters"}
         hint="Stored encrypted. It is never shown again." autoComplete="new-password" />
@@ -59,10 +60,10 @@ export function MetaForm({ connected, initial }: { connected: boolean; initial: 
   const [open, setOpen] = useState(!connected);
   const { pending, run } = useRun();
   const router = useRouter();
-  if (!open) return <button type="button" className={secondary} onClick={() => setOpen(true)}>Edit WhatsApp settings</button>;
+  if (!open) return <button type="button" className={secondary} onClick={() => setOpen(true)}><Icon name="pencil" className="h-4 w-4" />Edit WhatsApp settings</button>;
   return (
     <form
-      className="space-y-3 rounded border border-stone-200 p-3"
+      className="space-y-4 rounded-xl border border-stone-200 bg-stone-50/60 p-4"
       onSubmit={async (e) => {
         e.preventDefault();
         const form = e.currentTarget;
@@ -70,7 +71,7 @@ export function MetaForm({ connected, initial }: { connected: boolean; initial: 
         if (r.ok) { form.reset(); setOpen(false); router.refresh(); }
       }}
     >
-      <p className="text-sm text-stone-700">From developers.facebook.com → your app → WhatsApp → API Setup. We check them with Meta before saving.</p>
+      <p className="text-sm text-stone-600">From developers.facebook.com → your app → WhatsApp → API Setup. We check them with Meta before saving.</p>
       <Field label="Phone number ID" name="phoneNumberId" defaultValue={initial.phoneNumberId} hint="Under “From” on the API Setup page (not the phone number itself)." />
       <Field label="WhatsApp Business Account ID (optional)" name="wabaId" defaultValue={initial.wabaId} />
       <Field label="Access token" name="accessToken" type="password" placeholder={connected ? "Leave blank to keep the saved token" : "EAA…"}
@@ -89,10 +90,10 @@ export function StripeForm({ connected }: { connected: boolean }) {
   const [open, setOpen] = useState(!connected);
   const { pending, run } = useRun();
   const router = useRouter();
-  if (!open) return <button type="button" className={secondary} onClick={() => setOpen(true)}>Edit Stripe settings</button>;
+  if (!open) return <button type="button" className={secondary} onClick={() => setOpen(true)}><Icon name="pencil" className="h-4 w-4" />Edit Stripe settings</button>;
   return (
     <form
-      className="space-y-3 rounded border border-stone-200 p-3"
+      className="space-y-4 rounded-xl border border-stone-200 bg-stone-50/60 p-4"
       onSubmit={async (e) => {
         e.preventDefault();
         const form = e.currentTarget;
@@ -100,7 +101,7 @@ export function StripeForm({ connected }: { connected: boolean }) {
         if (r.ok) { form.reset(); setOpen(false); router.refresh(); }
       }}
     >
-      <p className="text-sm text-stone-700">Use Stripe in <strong>test mode</strong>. Live keys are refused.</p>
+      <p className="text-sm text-stone-600">Use Stripe in <strong>test mode</strong>. Live keys are refused.</p>
       <Field label="Secret key" name="secretKey" type="password" placeholder={connected ? "Leave blank to keep the saved key" : "sk_test_…"}
         hint="Stripe → Developers → API keys. Stored encrypted." autoComplete="new-password" />
       <Field label="Webhook signing secret" name="webhookSecret" type="password" placeholder={connected ? "Leave blank to keep the saved secret" : "whsec_…"}
@@ -117,8 +118,8 @@ export function PrepareWebhookButton({ provider }: { provider: "TWILIO" | "STRIP
   const { pending, run } = useRun();
   const router = useRouter();
   return (
-    <div className="space-y-1 text-sm">
-      <p className="text-stone-700">Need the webhook URL before connecting? Create it now.</p>
+    <div className="space-y-2 text-sm">
+      <p className="text-stone-600">Need the webhook URL before connecting? Create it now.</p>
       <button type="button" className={secondary} disabled={!!pending}
         onClick={() => run("prep", () => prepareWebhookAction(provider), { onOk: () => router.refresh() })}>
         {pending && <Spinner />}Show webhook URL
@@ -133,7 +134,7 @@ export function TestButton({ provider }: { provider: "TWILIO" | "STRIPE" | "META
   return (
     <button type="button" className={secondary} disabled={!!pending}
       onClick={() => run("test", () => testConnectionAction(provider)).then(() => router.refresh())}>
-      {pending && <Spinner />}{pending ? "Testing…" : "Test connection"}
+      {pending ? <Spinner /> : <Icon name="refresh" className="h-4 w-4" />}{pending ? "Testing…" : "Test connection"}
     </button>
   );
 }
@@ -147,7 +148,7 @@ export function DisconnectButton({ provider, label }: { provider: "TWILIO" | "ST
         if (!confirm(`Disconnect ${label}? The saved credentials will be deleted and it will stop working until reconnected.`)) return;
         run("disc", () => disconnectAction(provider), { onOk: () => router.refresh() });
       }}>
-      {pending && <Spinner />}Disconnect
+      {pending ? <Spinner /> : <Icon name="power" className="h-4 w-4" />}Disconnect
     </button>
   );
 }

@@ -6,6 +6,9 @@ import { Chip } from "@/lib/integrations/ui/StatusChip";
 import { TimeAgo } from "@/lib/integrations/ui/TimeAgo";
 import { Spinner } from "@/lib/integrations/ui/Spinner";
 import { ThreadView, type ThreadData } from "@/lib/integrations/ui/Thread";
+import { Icon } from "@/components/ui/Icon";
+import { Avatar, EmptyState, Notice } from "@/components/ui/Kit";
+import { ui } from "@/components/ui/styles";
 
 type Item = {
   id: string;
@@ -43,56 +46,78 @@ export function InboxClient({ initialId }: { initialId: string | null }) {
   const thread = useSWR<ThreadData>(selected ? `/inbox/data/${selected}` : null, fetcher, { refreshInterval: 3000 });
 
   return (
-    <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,20rem)_minmax(0,1fr)]">
-      <section aria-label="Conversations" className={`min-w-0 space-y-2 ${selected ? "hidden md:block" : ""}`}>
+    <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-[minmax(0,21rem)_minmax(0,1fr)] md:gap-6">
+      <section aria-label="Conversations" className={`min-w-0 space-y-3 ${selected ? "hidden md:block" : ""}`}>
         <label htmlFor={searchId} className="sr-only">Search conversations by name or phone</label>
-        <input id={searchId} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or phone"
-          className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-700" />
-        {list.error && <p role="alert" className="rounded border border-red-300 bg-red-50 p-2 text-sm text-red-900"><span aria-hidden="true">⚠ </span>{(list.error as Error).message}</p>}
-        {!list.data && !list.error && <p className="text-sm text-stone-600"><Spinner /> Loading conversations…</p>}
-        <ul className="space-y-1">
-          {list.data?.items.map((c) => (
-            <li key={c.id}>
-              <button type="button" onClick={() => setSelected(c.id)} aria-current={selected === c.id ? "true" : undefined}
-                className={`w-full rounded-lg border p-3 text-left text-sm focus:outline-none focus:ring-2 focus:ring-emerald-700 ${selected === c.id ? "border-emerald-600 bg-emerald-50" : "border-stone-200 bg-white hover:bg-stone-50"}`}>
-                <span className="flex items-center justify-between gap-2">
-                  <span className="truncate font-medium">{c.contact.name} <span className="font-normal text-stone-600">· {c.kind === "WEBCHAT" ? "Website chat" : "WhatsApp"}</span></span>
-                  <span className="shrink-0 text-xs text-stone-600"><TimeAgo date={c.lastMessageAt} /></span>
-                </span>
-                <span className="mt-0.5 block truncate text-stone-700">
-                  {c.last ? `${c.last.direction === "OUT" ? "You: " : ""}${c.last.body}` : "No messages"}
-                </span>
-                <span className="mt-1 flex flex-wrap items-center gap-1 text-xs text-stone-600">
-                  <span>{c.assignee.name ? `Handled by ${c.assignee.name}` : "Not assigned"}</span>
-                  {c.unread > 0 && <Chip tone="info">{c.unread} new</Chip>}
-                  {c.contact.optedOut && <Chip tone="bad">Opted out</Chip>}
-                  {c.last?.status === "FAILED" && <Chip tone="bad">Send failed</Chip>}
-                </span>
-              </button>
-            </li>
-          ))}
-          {list.data && list.data.items.length === 0 && (
-            <li className="rounded border border-dashed border-stone-300 p-4 text-center text-sm text-stone-600">
-              {query ? "No conversations match your search." : "No conversations yet. Customers who message you on the website chat (or WhatsApp) appear here. Use “Try it” above to play the customer."}
-            </li>
-          )}
-        </ul>
+        <div className="relative">
+          <Icon name="search" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" />
+          <input id={searchId} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or phone" className={`${ui.input} pl-9`} />
+        </div>
+        {list.error && <Notice tone="bad">{(list.error as Error).message}</Notice>}
+        {!list.data && !list.error && <p className="flex items-center gap-2 text-sm text-stone-600"><Spinner /> Loading conversations…</p>}
+        {list.data && list.data.items.length === 0 ? (
+          <EmptyState compact icon="inbox" title={query ? "No conversations match your search." : "No conversations yet"}>
+            {!query && "Customers who message you on the website chat (or WhatsApp) appear here. Use “Try it” above to play the customer."}
+          </EmptyState>
+        ) : list.data && (
+          <ul className={`${ui.cardFlush} divide-y divide-stone-100`}>
+            {list.data.items.map((c) => {
+              const on = selected === c.id;
+              return (
+                <li key={c.id}>
+                  <button type="button" onClick={() => setSelected(c.id)} aria-current={on ? "true" : undefined}
+                    className={`relative flex w-full gap-3 px-4 py-3 text-left text-sm transition-colors ${on ? "bg-emerald-50/70" : "hover:bg-stone-50"}`}>
+                    {on && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px] bg-emerald-700" />}
+                    <Avatar name={c.contact.name} size="sm" />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className={`truncate ${c.unread > 0 ? "font-bold text-stone-900" : "font-semibold text-stone-800"}`}>{c.contact.name}</span>
+                        <span className="shrink-0 text-[11px] text-stone-500"><TimeAgo date={c.lastMessageAt} /></span>
+                      </span>
+                      <span className={`mt-0.5 block truncate ${c.unread > 0 ? "text-stone-800" : "text-stone-600"}`}>
+                        {c.last ? `${c.last.direction === "OUT" ? "You: " : ""}${c.last.body}` : "No messages"}
+                      </span>
+                      <span className="mt-1.5 flex flex-wrap items-center gap-1 text-[11px] text-stone-500">
+                        <span className="inline-flex items-center gap-1"><Icon name={c.kind === "WEBCHAT" ? "globe" : "whatsapp"} className="h-3 w-3" />{c.kind === "WEBCHAT" ? "Website chat" : "WhatsApp"}</span>
+                        <span aria-hidden="true">·</span>
+                        <span>{c.assignee.name ? c.assignee.name : "Not assigned"}</span>
+                        {c.unread > 0 && <Chip tone="info">{c.unread} new</Chip>}
+                        {c.contact.optedOut && <Chip tone="bad">Opted out</Chip>}
+                        {c.last?.status === "FAILED" && <Chip tone="bad">Send failed</Chip>}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
         {list.data && list.data.pages > 1 && (
           <nav aria-label="Pages" className="flex items-center justify-between text-sm">
-            <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border border-stone-300 bg-white px-2 py-1 disabled:opacity-50">← Newer</button>
-            <span>{page} / {list.data.pages}</span>
-            <button type="button" disabled={page >= list.data.pages} onClick={() => setPage(page + 1)} className="rounded border border-stone-300 bg-white px-2 py-1 disabled:opacity-50">Older →</button>
+            <button type="button" disabled={page <= 1} onClick={() => setPage(page - 1)} className={ui.btnSm}><Icon name="chevronLeft" className="h-3.5 w-3.5" />Newer</button>
+            <span className="tabular-nums text-stone-600">{page} / {list.data.pages}</span>
+            <button type="button" disabled={page >= list.data.pages} onClick={() => setPage(page + 1)} className={ui.btnSm}>Older<Icon name="chevronRight" className="h-3.5 w-3.5" /></button>
           </nav>
         )}
       </section>
 
       <section aria-label="Conversation" className={`min-w-0 ${selected ? "" : "hidden md:block"}`}>
         {selected && (
-          <button type="button" onClick={() => setSelected(null)} className="mb-2 text-sm text-emerald-800 underline md:hidden">← All conversations</button>
+          <button type="button" onClick={() => setSelected(null)} className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-stone-600 hover:text-stone-900 md:hidden">
+            <Icon name="arrowLeft" className="h-4 w-4" /> All conversations
+          </button>
         )}
-        {!selected && <p className="rounded-lg border border-dashed border-stone-300 p-8 text-center text-sm text-stone-600">Choose a conversation to read and reply.</p>}
-        {selected && thread.error && <p role="alert" className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-900"><span aria-hidden="true">⚠ </span>{(thread.error as Error).message}</p>}
-        {selected && !thread.data && !thread.error && <p className="text-sm text-stone-600"><Spinner /> Loading messages…</p>}
+        {!selected && (
+          <div className="grid h-full min-h-[24rem] place-items-center rounded-xl border border-dashed border-stone-300 bg-white/60 p-8 text-center">
+            <div>
+              <span className="mx-auto grid h-11 w-11 place-items-center rounded-full bg-stone-100 text-stone-500"><Icon name="inbox" className="h-5 w-5" /></span>
+              <p className="mt-3 text-sm font-semibold text-stone-900">Choose a conversation</p>
+              <p className="mt-1 text-sm text-stone-600">Pick one on the left to read and reply.</p>
+            </div>
+          </div>
+        )}
+        {selected && thread.error && <Notice tone="bad">{(thread.error as Error).message}</Notice>}
+        {selected && !thread.data && !thread.error && <p className="flex items-center gap-2 text-sm text-stone-600"><Spinner /> Loading messages…</p>}
         {selected && thread.data && <ThreadView thread={thread.data} onChanged={() => { thread.mutate(); list.mutate(); }} />}
       </section>
     </div>

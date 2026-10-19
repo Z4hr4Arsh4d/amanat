@@ -3,6 +3,7 @@
 import useSWR from "swr";
 import { useAction } from "@/components/ui/useAction";
 import { ui } from "@/components/ui/styles";
+import { Spinner } from "@/components/ui/Spinner";
 import { listAssignees, reassignLead } from "./actions";
 
 export function ReassignMenu({ leadId, currentOwnerName, onDone }: { leadId: string; currentOwnerName?: string | null; onDone?: () => void }) {
@@ -15,18 +16,19 @@ export function ReassignMenu({ leadId, currentOwnerName, onDone }: { leadId: str
 
   return (
     <span className="inline-flex items-center gap-2">
-      <label htmlFor={`re-${leadId}`} className="text-sm font-medium text-stone-800">Reassign to</label>
+      <label htmlFor={`re-${leadId}`} className="text-xs font-semibold text-stone-600">Reassign to</label>
       <select
-        id={`re-${leadId}`} className={`${ui.input} w-auto`} disabled={pending || !data} value=""
+        id={`re-${leadId}`} className={ui.inputSm} disabled={pending || !data} value=""
         onChange={(e) => {
           const to = data?.find((u) => u.id === e.target.value);
           if (!to) return;
           run(() => reassignLead({ leadId, toUserId: to.id }), { success: `Lead reassigned to ${to.name}.`, onSuccess: () => onDone?.() });
         }}
       >
-        <option value="">Choose…</option>
+        <option value="">Choose a person…</option>
         {data?.filter((u) => u.name !== currentOwnerName).map((u) => <option key={u.id} value={u.id}>{u.name}{u.status === "AVAILABLE" ? "" : ` (${u.status.toLowerCase().replace("_", " ")})`}</option>)}
       </select>
+      {pending && <Spinner className="h-3.5 w-3.5 text-stone-500" />}
     </span>
   );
 }

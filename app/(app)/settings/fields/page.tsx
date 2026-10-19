@@ -2,7 +2,7 @@
 import { requireUserPage, can } from "@/lib/core/session";
 import { scoped } from "@/lib/core/scoped";
 import { NoAccess } from "@/components/ui/NoAccess";
-import { ui } from "@/components/ui/styles";
+import { PageHeader } from "@/components/ui/Kit";
 import { FieldsClient } from "./FieldsClient";
 
 export default async function FieldsPage() {
@@ -18,13 +18,7 @@ export default async function FieldsPage() {
   ]);
   return (
     <section className="space-y-6">
-      <div>
-        <h1 className={ui.h1}>Custom fields</h1>
-        <p className={ui.muted}>
-          Add your own fields to contacts, companies and opportunities. New fields show up on every form right away.
-          Opportunity fields can be shared by all pipelines or belong to one pipeline.
-        </p>
-      </div>
+      <PageHeader title="Custom fields" description="Add your own fields to contacts, companies and opportunities. New fields show up on every form right away. Opportunity fields can be shared by all pipelines or belong to one pipeline." />
       <FieldsClient fields={fields} pipelines={pipelines} />
     </section>
   );

@@ -11,26 +11,26 @@ export function DynamicFields({ defs, values, onChange, idPrefix, required = [] 
 }) {
   if (defs.length === 0) return null;
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2">
       {defs.map((d) => {
         const id = `${idPrefix}-cf-${d.key}`;
         const v = values[d.key] as V;
         const req = required.includes(d.id);
         const label = (
           <label htmlFor={id} className={ui.label}>
-            {d.label} {req && <span className="text-xs font-normal text-amber-800">(needed for this stage)</span>}
+            {d.label} {req && <span className="ml-1 inline-flex items-center rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-900 ring-1 ring-amber-200">Needed for this stage</span>}
           </label>
         );
         if (d.type === "CHECKBOX") {
           return (
-            <div key={d.key} className="flex items-center gap-2 pt-6">
-              <input id={id} type="checkbox" checked={v === true} onChange={(e) => onChange(d.key, e.target.checked)} className="h-4 w-4 accent-emerald-800" />
+            <div key={d.key} className="flex items-center gap-2.5 sm:pt-7">
+              <input id={id} type="checkbox" checked={v === true} onChange={(e) => onChange(d.key, e.target.checked)} className={ui.check} />
               {label}
             </div>
           );
         }
         return (
-          <div key={d.key} className="space-y-1">
+          <div key={d.key} className={ui.field}>
             {label}
             {d.type === "DROPDOWN" ? (
               <select id={id} value={typeof v === "string" ? v : ""} onChange={(e) => onChange(d.key, e.target.value || null)} className={ui.input}>
@@ -58,14 +58,14 @@ export function DynamicFields({ defs, values, onChange, idPrefix, required = [] 
 export function FieldValues({ defs, values }: { defs: FieldDefView[]; values: Record<string, unknown> }) {
   if (defs.length === 0) return null;
   return (
-    <dl className="grid gap-x-4 gap-y-2 text-sm sm:grid-cols-2">
+    <dl className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-4">
       {defs.map((d) => {
         const v = values[d.key];
-        const text = v === null || v === undefined || v === "" ? "—" : v === true ? "✓ Yes" : v === false ? "✗ No" : String(v);
+        const text = v === null || v === undefined || v === "" ? "—" : v === true ? "Yes" : v === false ? "No" : String(v);
         return (
           <div key={d.key} className="min-w-0">
-            <dt className="text-stone-600">{d.label}</dt>
-            <dd className="break-words font-medium">{text}</dd>
+            <dt className="text-xs font-semibold uppercase tracking-wider text-stone-500">{d.label}</dt>
+            <dd className="mt-1 break-words text-sm font-semibold text-stone-900">{text}</dd>
           </div>
         );
       })}
